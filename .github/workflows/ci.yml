@@ -55,3 +55,7 @@ jobs:
             }
           }
           if ($failed) { throw 'One or more PowerShell scripts contain syntax errors.' }
+          $serviceInstaller = Get-Content ./scripts/install-windows-service.ps1 -Raw
+          if ($serviceInstaller -match 'Invoke-ServiceControl\s+config\s+\$ServiceName\s+binPath=') {
+            throw 'Service binary paths must not be passed through sc.exe; use Win32_Service.Change.'
+          }
