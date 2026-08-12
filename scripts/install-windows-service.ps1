@@ -77,6 +77,33 @@ function Grant-DirectoryAccess([string]$Path, [string]$Account, [string]$Permiss
     }
 }
 
+function Set-ServiceLaunchConfiguration(
+    [string]$Name,
+    [string]$PathName,
+    [string]$ServiceDisplayName) {
+    # sc.exe reparses nested quotes in binPath= and can split the --urls value into
+    # separate sc.exe arguments. Win32_Service.Change passes PathName as one string.
+    $escapedName = $Name.Replace("'", "''")
+    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='$escapedName'" -ErrorAction Stop
+    if (-not $service) {
+        throw "Windows service '$Name' was not found after creation."
+    }
+
+    $result = Invoke-CimMethod -InputObject $service -MethodName Change -Arguments @{
+        PathName = $PathName
+        DisplayName = $ServiceDisplayName
+        StartMode = 'Automatic'
+    }
+    if ($result.ReturnValue -ne 0) {
+        throw "Windows could not configure service '$Name' (Win32_Service.Change return code $($result.ReturnValue))."
+    }
+
+    $configured = Get-CimInstance -ClassName Win32_Service -Filter "Name='$escapedName'" -ErrorAction Stop
+    if ($configured.PathName -ne $PathName) {
+        throw "Windows stored an unexpected service command line. Expected '$PathName', got '$($configured.PathName)'."
+    }
+}
+
 Assert-Port 'Administrator port' $Port
 Assert-Port 'Public portal port' $PublicPortalPort
 Assert-SafeDirectory 'Source directory' $SourceDirectory
@@ -155,12 +182,11 @@ if (-not [string]::IsNullOrWhiteSpace($JavaPath) -and (Test-Path -LiteralPath $J
     Grant-DirectoryAccess (Split-Path -Parent $JavaPath) $ServiceAccount 'RX'
 }
 
-if ($existing) {
-    Invoke-ServiceControl config $ServiceName binPath= $binaryPath start= auto DisplayName= "`"$DisplayName`""
-}
-else {
+if (-not $existing) {
     New-Service -Name $ServiceName -BinaryPathName $binaryPath -DisplayName $DisplayName -StartupType Automatic | Out-Null
 }
+Set-ServiceLaunchConfiguration $ServiceName $binaryPath $DisplayName
+Write-Host "Service command line configured: $binaryPath"
 
 Invoke-ServiceControl config $ServiceName obj= $ServiceAccount
 Invoke-ServiceControl description $ServiceName 'Self-hosted game server control panel'

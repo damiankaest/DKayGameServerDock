@@ -32,3 +32,6 @@ src/DKay.GameServerDock.Api/wwwroot/
 
 ## Logs
 *.log
+
+## Local build packages
+artifacts/
