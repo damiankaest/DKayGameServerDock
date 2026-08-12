@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CreateServerRequest, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication } from './models';
+import { ApplyCs2ModePresetRequest, CreateServerRequest, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -58,6 +58,22 @@ export class ApiService {
 
   publicServers(): Observable<PublicServerList> {
     return this.http.get<PublicServerList>('/api/public/servers');
+  }
+
+  cs2ModeCatalog(): Observable<Cs2ModeCatalog> {
+    return this.http.get<Cs2ModeCatalog>('/api/cs2/mode-presets');
+  }
+
+  cs2Mode(id: string): Observable<Cs2ModeState> {
+    return this.http.get<Cs2ModeState>(`/api/servers/${id}/cs2-mode`);
+  }
+
+  applyCs2Mode(id: string, request: ApplyCs2ModePresetRequest): Observable<Cs2ModeApplyResult> {
+    return this.http.put<Cs2ModeApplyResult>(`/api/servers/${id}/cs2-mode`, request);
+  }
+
+  installCs2Package(id: string, packageId: string): Observable<void> {
+    return this.http.post<void>(`/api/servers/${id}/cs2-packages/${packageId}/install`, {});
   }
 
   sendCommand(id: string, command: string): Observable<void> {

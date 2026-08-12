@@ -11,28 +11,25 @@ C:\Tools\SteamCMD\steamcmd.exe        Steam installer runtime
 
 All paths can be overridden. Do not store game files below the Git checkout.
 
-## Prepare the host
+## Recommended installation
 
-1. Install the .NET 10 SDK and Node.js only when building on the host. The default publish is self-contained, so the installed service does not require a separate .NET runtime.
-2. Install SteamCMD into a dedicated tools directory.
-3. Install the Java version required by the desired Paper build.
-4. Create a local service account, for example `DKayDockService`.
-5. Grant that account modify permission on the application-data and server roots, and read/execute permission on SteamCMD and Java.
-6. Set `DGS_STEAMCMD_PATH` and `DGS_JAVA_PATH` as machine environment variables.
+Use the release ZIP and `Setup.cmd` described in [Install on Windows](install-windows.md). The wizard performs host preparation, runtime discovery, service configuration, least-privilege ACLs, firewall setup and health validation.
+
+The default service identity is `NT AUTHORITY\LocalService`, not `LocalSystem`. Configuration is attached to the Windows service in its registry `Environment` value; global machine environment variables are not required.
 
 ## Publish and install
 
-Run from an elevated PowerShell terminal in the repository:
+Developers can build and launch the identical package from an elevated PowerShell terminal in the repository:
 
 ```powershell
 .\scripts\test-windows-host.ps1 -IncludeBuildTools
-.\scripts\publish-windows.ps1
-.\scripts\install-windows-service.ps1 -OpenLanFirewall
+.\scripts\package-windows.ps1
+.\artifacts\package-win-x64\Setup.cmd
 ```
 
 The default service listens on `0.0.0.0:5080`. The installation script waits until `/health` responds and can create a Windows Firewall rule limited to the local subnet. Browse to `http://SERVER-LAN-IP:5080`, create the local administrator and open **Host → Run checks** before installing a game.
 
-To run under a dedicated account, update the Windows service in `services.msc` after installation and provide that account's password there. The install script intentionally does not accept credentials.
+Do not change the service account in `services.msc` without granting the replacement identity the same explicit filesystem permissions.
 
 ## Firewall
 
@@ -52,10 +49,10 @@ New-NetFirewallRule -DisplayName 'DKay Game Server Dock (LAN)' -Direction Inboun
 
 ## Updates
 
-1. Stop the Windows service.
-2. Back up `%ProgramData%\DKayGameServerDock`.
-3. Publish the new application over the program directory.
-4. Start the service and check `/health` plus the dashboard.
+1. Back up `%ProgramData%\DKayGameServerDock` before important upgrades.
+2. Download and extract the newer release.
+3. Run `Setup.cmd`, keep or update the existing values and confirm.
+4. Setup stops the service, backs up SQLite, mirrors the application payload, reapplies its restricted permissions and checks `/health`.
 
 Game server files and application data are outside the publish directory, so application deployment does not overwrite them.
 

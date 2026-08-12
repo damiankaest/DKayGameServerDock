@@ -1,0 +1,24 @@
+using DKay.GameServerDock.Application.Models;
+using DKay.GameServerDock.Domain;
+
+namespace DKay.GameServerDock.Application.Abstractions;
+
+public interface ICs2ModeManager
+{
+    IReadOnlyList<Cs2ModePresetDescriptor> Presets { get; }
+    IReadOnlyList<Cs2ManagedPackageDescriptor> Packages { get; }
+    Cs2ModeProfile? GetActiveProfile(GameServerInstance server);
+
+    Task<Cs2ModeState> GetStateAsync(GameServerInstance server, CancellationToken cancellationToken);
+    Task<Cs2ModeState> ApplyPresetAsync(
+        GameServerInstance server,
+        ApplyCs2ModePresetRequest request,
+        CancellationToken cancellationToken);
+    Task RepairAfterGameUpdateAsync(GameServerInstance server, CancellationToken cancellationToken);
+    IReadOnlyList<string> ResolveAutomaticInstallOrder(IEnumerable<string> packageIds);
+    Task InstallPackageAsync(
+        GameServerInstance server,
+        string packageId,
+        Func<InstallationProgress, CancellationToken, Task> reportProgress,
+        CancellationToken cancellationToken);
+}

@@ -5,7 +5,7 @@ using DKay.GameServerDock.Infrastructure.Installation;
 
 namespace DKay.GameServerDock.Infrastructure.Games;
 
-public sealed class Cs2GameModule(Cs2Installer installer) : IGameModule
+public sealed class Cs2GameModule(Cs2Installer installer, ICs2ModeManager modes) : IGameModule
 {
     public GameTemplateDescriptor Descriptor { get; } = new(
         "counter-strike-2",
@@ -33,24 +33,36 @@ public sealed class Cs2GameModule(Cs2Installer installer) : IGameModule
     public ServerLaunchSpec BuildLaunchSpec(GameServerInstance server)
     {
         var settings = GameSettings.Read(server);
+        var activeProfile = modes.GetActiveProfile(server);
         var executable = OperatingSystem.IsWindows()
             ? Path.Combine(server.InstallDirectory, "game", "bin", "win64", "cs2.exe")
             : Path.Combine(server.InstallDirectory, "game", "bin", "linuxsteamrt64", "cs2");
 
-        return new ServerLaunchSpec(
-            executable,
-            server.InstallDirectory,
-            [
+        var arguments = new List<string>
+        {
                 "-dedicated",
                 "-console",
                 "-usercon",
                 "-port",
-                server.Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "+exec",
-                "dkay-server.cfg",
-                "+map",
-                settings.Get("initialMap", "de_mirage")
-            ],
+                server.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+        if (!string.IsNullOrWhiteSpace(activeProfile?.WorkshopId))
+        {
+            arguments.Add("+host_workshop_map");
+            arguments.Add(activeProfile.WorkshopId);
+        }
+        else
+        {
+            arguments.Add("+map");
+            arguments.Add(activeProfile?.MapName ?? settings.Get("initialMap", "de_mirage"));
+        }
+        arguments.Add("+exec");
+        arguments.Add("dkay-server.cfg");
+
+        return new ServerLaunchSpec(
+            executable,
+            server.InstallDirectory,
+            arguments,
             new Dictionary<string, string>());
     }
 }

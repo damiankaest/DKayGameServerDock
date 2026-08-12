@@ -86,6 +86,8 @@ export interface PublicServer {
   protocols: string[];
   passwordProtected: boolean;
   maxPlayers: number | null;
+  mode: string | null;
+  map: string | null;
   updatedAt: string;
 }
 
@@ -158,4 +160,84 @@ export interface CreateServerRequest {
   rconPort: number | null;
   ramLimitMb: number;
   settings: Record<string, string>;
+}
+
+export interface Cs2ConVar {
+  key: string;
+  label: string;
+  type: 'integer' | 'decimal' | 'boolean' | 'text';
+  defaultValue: string;
+  editable: boolean;
+  description: string;
+  minimum: number | null;
+  maximum: number | null;
+  options: string[] | null;
+}
+
+export interface Cs2ModePreset {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  description: string;
+  mapPrefixes: string[];
+  recommendedPackageIds: string[];
+  settings: Cs2ConVar[];
+}
+
+export interface Cs2ManagedPackage {
+  id: string;
+  name: string;
+  kind: string;
+  description: string;
+  publisher: string;
+  projectUrl: string;
+  automaticInstall: boolean;
+  experimental: boolean;
+  dependencyIds: string[];
+}
+
+export interface Cs2ModeCatalog {
+  presets: Cs2ModePreset[];
+  packages: Cs2ManagedPackage[];
+}
+
+export interface Cs2ModeProfile {
+  id: string;
+  presetId: string;
+  presetName: string;
+  mapName: string;
+  workshopId: string | null;
+  botQuota: number;
+  botDifficulty: number;
+  overrides: Record<string, string>;
+  recommendedPackageIds: string[];
+  updatedAt: string;
+}
+
+export interface Cs2ManagedPackageState extends Cs2ManagedPackage {
+  installed: boolean;
+  installedVersion: string | null;
+  installedAt: string | null;
+}
+
+export interface Cs2ModeState {
+  activeProfileId: string | null;
+  profiles: Cs2ModeProfile[];
+  packages: Cs2ManagedPackageState[];
+}
+
+export interface ApplyCs2ModePresetRequest {
+  presetId: string;
+  mapName: string;
+  workshopId: string | null;
+  botQuota: number;
+  botDifficulty: number;
+  installRecommendedPackages: boolean;
+  overrides: Record<string, string>;
+}
+
+export interface Cs2ModeApplyResult {
+  state: Cs2ModeState;
+  queuedPackageIds: string[];
 }

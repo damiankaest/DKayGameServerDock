@@ -36,3 +36,22 @@ jobs:
       - run: npm test -- --watch=false
       - run: npm run build
 
+  windows-scripts:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell setup scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Path scripts, . -Filter '*.ps1' -File | Sort-Object FullName -Unique | ForEach-Object {
+            $file = $_
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            foreach ($parseError in $errors) {
+              Write-Error "$($file.FullName): $($parseError.Message)"
+              $failed = $true
+            }
+          }
+          if ($failed) { throw 'One or more PowerShell scripts contain syntax errors.' }
