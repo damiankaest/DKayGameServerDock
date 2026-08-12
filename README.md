@@ -138,6 +138,16 @@ From an elevated PowerShell terminal:
 
 The package script builds Angular, publishes the API self-contained, creates the click-to-run wizard and writes a SHA-256 checksum. Tagged commits run the Windows release workflow and attach the same ZIP to GitHub Releases. See the [first-run checklist](docs/first-run-checklist.md) and [Windows operations guide](docs/windows-hosting.md).
 
+## Update an installed source checkout
+
+After the first installation, double-click **Update.cmd** in the repository root. The updater requests administrator access, requires a clean `main` checkout, pulls with `--ff-only`, rebuilds the self-contained Windows package, preserves the current service paths, SteamCMD/Java and guest-portal settings, creates the normal database backup, upgrades the service and verifies its health. A timestamped transcript is written below `artifacts`. If no service exists yet, it opens the first-time setup wizard instead.
+
+PowerShell users can run the same flow explicitly:
+
+```powershell
+.\Update-DKayGameServerDock.ps1
+```
+
 ## First Minecraft Paper server
 
 1. Configure a compatible Java executable.

@@ -21,7 +21,9 @@ foreach ($command in @('npm', 'dotnet')) {
 Push-Location $webRoot
 try {
     npm ci
+    if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
     npm run build
+    if ($LASTEXITCODE -ne 0) { throw "Angular build failed with exit code $LASTEXITCODE." }
 }
 finally {
     Pop-Location
@@ -38,5 +40,9 @@ dotnet publish (Join-Path $apiRoot 'DKay.GameServerDock.Api.csproj') `
     --runtime $Runtime `
     --self-contained $SelfContained `
     --output $artifactRoot
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
+if (-not (Test-Path -LiteralPath (Join-Path $artifactRoot 'DKay.GameServerDock.Api.exe') -PathType Leaf)) {
+    throw "dotnet publish completed without creating the expected Windows executable."
+}
 
 Write-Host "Published DKayGameServerDock to $artifactRoot (self-contained: $SelfContained)"
