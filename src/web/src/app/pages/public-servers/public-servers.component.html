@@ -1,0 +1,55 @@
+<main class="guest-page">
+  <header class="guest-hero">
+    <div class="brand-mark"><span>DK</span></div>
+    <p class="eyebrow">PRIVATE GAME NIGHT</p>
+    <h1>{{ listing()?.name || 'DKay Game Servers' }}</h1>
+    <p>Choose a published server, copy its address and join from your game.</p>
+  </header>
+
+  @if (error()) {
+    <section class="guest-message error-banner">
+      <strong>Guest portal offline</strong>
+      <p>{{ error() }}</p>
+      <button class="secondary-button" type="button" (click)="load()">Try again</button>
+    </section>
+  } @else if (loading()) {
+    <div class="guest-server-grid">
+      <div class="skeleton-block tall"></div>
+      <div class="skeleton-block tall"></div>
+    </div>
+  } @else if (listing(); as current) {
+    <section class="guest-server-grid">
+      @for (server of current.servers; track server.name + server.joinAddress) {
+        <article class="guest-server-card">
+          <header>
+            <span class="game-icon xlarge">{{ server.templateIcon }}</span>
+            <span class="status large" [attr.data-status]="server.status">{{ server.status }}</span>
+          </header>
+          <div>
+            <p class="eyebrow">{{ server.templateName }}</p>
+            <h2>{{ server.name }}</h2>
+          </div>
+          <dl>
+            <div><dt>Network</dt><dd>{{ server.protocols.join(' + ') }} · :{{ server.publicPort }}</dd></div>
+            <div><dt>Slots</dt><dd>{{ server.maxPlayers || 'Game default' }}</dd></div>
+            <div><dt>Access</dt><dd>{{ server.passwordProtected ? 'Password protected' : 'Open to friends' }}</dd></div>
+          </dl>
+          <button class="copy-address" type="button" [disabled]="server.status !== 'Running'" (click)="copy(server.joinAddress)">
+            <span><small>JOIN ADDRESS</small><code>{{ server.joinAddress }}</code></span>
+            <b>{{ copied() === server.joinAddress ? 'Copied!' : 'Copy' }}</b>
+          </button>
+          @if (server.status !== 'Running') {
+            <small class="guest-offline-hint">This server is published but currently not running.</small>
+          }
+        </article>
+      } @empty {
+        <div class="guest-empty">
+          <span>◌</span>
+          <h2>No servers published yet</h2>
+          <p>The host has not shared a game server at the moment.</p>
+        </div>
+      }
+    </section>
+    <footer class="guest-footer">Read-only guest view · no administrator access · updated {{ current.generatedAt }}</footer>
+  }
+</main>

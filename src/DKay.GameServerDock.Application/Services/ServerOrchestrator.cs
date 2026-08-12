@@ -212,7 +212,7 @@ public sealed class ServerOrchestrator(
         server.UpdateSettings(
             request.Name,
             request.RamLimitMb,
-            JsonSerializer.Serialize(request.Settings),
+            ServerPublicationSettings.MergeGameSettings(server, request.Settings),
             request.Autostart,
             request.AutoRestart,
             clock.UtcNow);
@@ -220,6 +220,28 @@ public sealed class ServerOrchestrator(
         await events.RecordAsync(
             ServerEvent.Create(server.Id, ServerEventType.ConfigurationChanged, "Server settings updated.", clock.UtcNow),
             cancellationToken);
+    }
+
+    public async Task<ServerPublicationState> UpdatePublicationAsync(
+        Guid serverId,
+        UpdateServerPublicationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetRequiredAsync(serverId, cancellationToken);
+        server.UpdatePublication(ServerPublicationSettings.Apply(server, request), clock.UtcNow);
+        await servers.SaveAsync(server, cancellationToken);
+
+        var publication = ServerPublicationSettings.Read(server);
+        await events.RecordAsync(
+            ServerEvent.Create(
+                server.Id,
+                ServerEventType.ConfigurationChanged,
+                publication.Published
+                    ? $"Server published for guest access on port {publication.PublicPort}."
+                    : "Server removed from guest access.",
+                clock.UtcNow),
+            cancellationToken);
+        return publication;
     }
 
     private async Task<GameServerInstance> GetRequiredAsync(Guid id, CancellationToken cancellationToken) =>

@@ -19,11 +19,10 @@ export const unauthorizedInterceptor: HttpInterceptorFn = (request, next) => {
   const router = inject(Router);
   return next(request).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (error.status === 401 && !request.url.includes('/api/auth/')) {
+      if (error.status === 401 && !request.url.includes('/api/auth/') && !request.url.includes('/api/public/')) {
         void router.navigate(['/auth']);
       }
       return throwError(() => error);
     })
   );
 };
-

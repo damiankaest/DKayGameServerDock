@@ -9,8 +9,10 @@ import { LibraryComponent } from './pages/library/library.component';
 import { ActivityComponent } from './pages/activity/activity.component';
 import { HostComponent } from './pages/host/host.component';
 import { ComingSoonComponent } from './pages/coming-soon/coming-soon.component';
+import { PublicServersComponent } from './pages/public-servers/public-servers.component';
 
 export const routes: Routes = [
+  { path: 'join', component: PublicServersComponent, title: 'Join a game server' },
   { path: 'auth', component: AuthComponent },
   {
     path: '',

@@ -22,6 +22,9 @@ export class ServerDetailComponent implements OnDestroy {
   readonly command = signal('');
   readonly progress = signal<{ percent: number; stage: string; message: string } | null>(null);
   readonly error = signal('');
+  readonly publicationPort = signal<number | null>(null);
+  readonly publicationSaving = signal(false);
+  readonly copied = signal('');
 
   constructor() {
     this.load();
@@ -45,6 +48,7 @@ export class ServerDetailComponent implements OnDestroy {
     forkJoin({ server: this.api.server(this.id), logs: this.api.logs(this.id) }).subscribe({
       next: result => {
         this.server.set(result.server);
+        this.publicationPort.set(result.server.publication.publicPort);
         this.logs.set([...result.logs].reverse());
       },
       error: error => this.error.set(error.error?.detail ?? 'The server could not be loaded.')
@@ -52,7 +56,10 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   loadServer(): void {
-    this.api.server(this.id).subscribe(server => this.server.set(server));
+    this.api.server(this.id).subscribe(server => {
+      this.server.set(server);
+      if (this.publicationPort() === null) this.publicationPort.set(server.publication.publicPort);
+    });
   }
 
   action(action: 'start' | 'stop' | 'restart' | 'kill' | 'update'): void {
@@ -74,6 +81,58 @@ export class ServerDetailComponent implements OnDestroy {
       next: () => this.command.set(''),
       error: error => this.error.set(error.error?.detail ?? 'The command could not be sent.')
     });
+  }
+
+  updatePublicationPort(event: Event): void {
+    this.publicationPort.set(Number((event.target as HTMLInputElement).value));
+  }
+
+  savePublication(published: boolean): void {
+    const publicPort = this.publicationPort();
+    if (!publicPort || publicPort < 1 || publicPort > 65535) {
+      this.error.set('The public port must be between 1 and 65535.');
+      return;
+    }
+
+    this.error.set('');
+    this.publicationSaving.set(true);
+    this.api.updatePublication(this.id, published, publicPort).subscribe({
+      next: publication => {
+        this.server.update(server => server ? { ...server, publication } : server);
+        this.publicationSaving.set(false);
+      },
+      error: error => {
+        this.error.set(error.error?.detail ?? 'The guest publication could not be updated.');
+        this.publicationSaving.set(false);
+      }
+    });
+  }
+
+  copy(value: string): void {
+    void this.copyText(value).then(() => {
+      this.copied.set(value);
+      setTimeout(() => this.copied.set(''), 1800);
+    });
+  }
+
+  private async copyText(value: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return;
+      } catch {
+        // Fall through for HTTP LAN access without the secure Clipboard API.
+      }
+    }
+
+    const input = document.createElement('textarea');
+    input.value = value;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    input.remove();
   }
 
   consoleLogs(): ServerEvent[] {

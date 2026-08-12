@@ -16,6 +16,7 @@ public sealed class Cs2GameModule(Cs2Installer installer) : IGameModule
         "SteamCMD",
         27015,
         4096,
+        ["UDP", "TCP"],
         GameCapability.LiveConsole | GameCapability.ConsoleInput | GameCapability.Players |
         GameCapability.CurrentMap | GameCapability.Backups | GameCapability.Files |
         GameCapability.Workshop | GameCapability.Plugins,
@@ -53,4 +54,3 @@ public sealed class Cs2GameModule(Cs2Installer installer) : IGameModule
             new Dictionary<string, string>());
     }
 }
-

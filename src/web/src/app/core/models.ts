@@ -17,6 +17,7 @@ export interface GameTemplate {
   installer: string;
   defaultPort: number;
   defaultRamMb: number;
+  networkProtocols: string[];
   capabilities: string;
   settings: TemplateSetting[];
 }
@@ -63,6 +64,35 @@ export interface GameServer {
   players: PlayerInfo[];
   currentMap: string | null;
   capabilities: string;
+  networkProtocols: string[];
+  publication: ServerPublication;
+}
+
+export interface ServerPublication {
+  published: boolean;
+  publicPort: number;
+  portalEnabled: boolean;
+  address: string | null;
+  portalUrl: string | null;
+}
+
+export interface PublicServer {
+  name: string;
+  templateName: string;
+  templateIcon: string;
+  status: string;
+  joinAddress: string;
+  publicPort: number;
+  protocols: string[];
+  passwordProtected: boolean;
+  maxPlayers: number | null;
+  updatedAt: string;
+}
+
+export interface PublicServerList {
+  name: string;
+  servers: PublicServer[];
+  generatedAt: string;
 }
 
 export interface DiskSnapshot {
