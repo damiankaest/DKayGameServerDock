@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../DKay.GameServerDock.Domain/DKay.GameServerDock.Domain.csproj" />
+  </ItemGroup>
+</Project>
+

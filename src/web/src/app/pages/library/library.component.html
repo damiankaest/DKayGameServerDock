@@ -1,0 +1,10 @@
+<div class="page">
+  <header class="page-header"><div><p class="eyebrow">CATALOG</p><h1>Game library</h1><p class="muted">Templates describe installation, launch behavior and game-specific capabilities.</p></div></header>
+  <label class="search-box"><span>⌕</span><input placeholder="Search games…" [value]="search()" (input)="updateSearch($event)" /></label>
+  <div class="library-grid">
+    @for (template of filtered(); track template.id) {
+      <article class="library-card"><div class="library-hero"><span class="game-icon xlarge">{{ template.icon }}</span><i>{{ template.category }}</i></div><h2>{{ template.name }}</h2><p>{{ template.description }}</p><div class="capability-list">@for (capability of template.capabilities.split(', '); track capability) { <span>{{ capability }}</span> }</div><footer><small>{{ template.installer }} · Default :{{ template.defaultPort }}</small><button class="primary-button small" (click)="create(template)">Create server</button></footer></article>
+    }
+  </div>
+</div>
+

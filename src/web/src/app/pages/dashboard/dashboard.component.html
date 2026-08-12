@@ -1,0 +1,41 @@
+<div class="page">
+  <header class="page-header">
+    <div><p class="eyebrow">CONTROL CENTER</p><h1>Good to see you, Damian.</h1><p class="muted">Your private game server host at a glance.</p></div>
+    <a class="primary-button" routerLink="/servers" [queryParams]="{ create: 'new' }">＋ Create server</a>
+  </header>
+
+  @if (error()) { <p class="error-banner">{{ error() }}</p> }
+
+  @if (host(); as currentHost) {
+    <section class="metric-grid">
+      <article class="metric-card"><div class="metric-heading"><span>CPU load</span><b>{{ currentHost.cpuPercent.toFixed(0) }}%</b></div><div class="meter"><i [style.width.%]="currentHost.cpuPercent"></i></div><small>{{ currentHost.architecture }} · {{ currentHost.hostName }}</small></article>
+      <article class="metric-card"><div class="metric-heading"><span>Memory</span><b>{{ memoryUsedPercent(currentHost).toFixed(0) }}%</b></div><div class="meter violet"><i [style.width.%]="memoryUsedPercent(currentHost)"></i></div><small>{{ formatBytes(currentHost.totalMemoryBytes - currentHost.availableMemoryBytes) }} / {{ formatBytes(currentHost.totalMemoryBytes) }}</small></article>
+      <article class="metric-card"><div class="metric-heading"><span>Storage</span><b>{{ diskUsedPercent(currentHost).toFixed(0) }}%</b></div><div class="meter amber"><i [style.width.%]="diskUsedPercent(currentHost)"></i></div><small>{{ formatBytes(currentHost.disks[0]?.availableBytes || 0) }} available</small></article>
+      <article class="metric-card accent"><div class="metric-heading"><span>Host status</span><b class="online-label">● Online</b></div><strong class="host-address">{{ currentHost.lanAddresses[0] || 'localhost' }}</strong><small>Web panel listening on port 5080</small></article>
+    </section>
+  } @else {
+    <div class="skeleton-block"></div>
+  }
+
+  <section class="section-heading"><div><h2>Game servers</h2><p class="muted">{{ servers().length }} installed instance{{ servers().length === 1 ? '' : 's' }}</p></div><a routerLink="/servers">View all →</a></section>
+  <div class="server-grid">
+    @for (server of servers(); track server.id) {
+      <article class="server-card">
+        <div class="server-card-top"><span class="game-icon">{{ server.templateIcon }}</span><div><h3>{{ server.name }}</h3><p>{{ server.templateName }}</p></div><span class="status" [attr.data-status]="server.status">{{ server.status }}</span></div>
+        <div class="server-meta"><span><small>ADDRESS</small>{{ host()?.lanAddresses?.[0] || 'localhost' }}:{{ server.port }}</span><span><small>PLAYERS</small>{{ server.players.length }} connected</span><span><small>RAM</small>{{ formatBytes(server.process.memoryBytes) }}</span></div>
+        <div class="server-card-footer">
+          <a class="secondary-button" [routerLink]="['/servers', server.id]">Manage</a>
+          @if (server.status === 'Running') {
+            <button class="icon-button" title="Restart" (click)="action(server, 'restart')">↻</button>
+            <button class="danger-button" (click)="action(server, 'stop')">Stop</button>
+          } @else if (server.status === 'Stopped' || server.status === 'Crashed') {
+            <button class="primary-button small" (click)="action(server, 'start')">▶ Start</button>
+          }
+        </div>
+      </article>
+    } @empty {
+      <article class="empty-state"><span class="game-icon large">＋</span><h3>No server instances yet</h3><p>Choose CS2 or Minecraft Paper and the Dock will install it for you.</p><a class="primary-button" routerLink="/servers" [queryParams]="{ create: 'new' }">Create first server</a></article>
+    }
+  </div>
+</div>
+

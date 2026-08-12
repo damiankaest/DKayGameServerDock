@@ -1,0 +1,13 @@
+using DKay.GameServerDock.Application.Models;
+using DKay.GameServerDock.Domain;
+
+namespace DKay.GameServerDock.Application.Abstractions;
+
+public interface IGameServerAdapter
+{
+    string GracefulStopCommand { get; }
+    Task<IReadOnlyList<PlayerInfo>> GetPlayersAsync(GameServerInstance server, CancellationToken cancellationToken);
+    Task<string?> GetCurrentMapAsync(GameServerInstance server, CancellationToken cancellationToken);
+    string NormalizeConsoleCommand(string command);
+}
+
