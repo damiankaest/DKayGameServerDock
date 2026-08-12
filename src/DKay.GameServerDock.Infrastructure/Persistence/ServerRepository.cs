@@ -43,7 +43,9 @@ public sealed class ServerRepository(AppDbContext database) : IServerRepository
         }
 
         return await query
-            .OrderByDescending(serverEvent => serverEvent.OccurredAt)
+            // SQLite cannot translate ordering by DateTimeOffset. Event IDs are generated in
+            // insertion order, so they provide the same chronology without client-side loading.
+            .OrderByDescending(serverEvent => serverEvent.Id)
             .Take(Math.Clamp(take, 1, 1000))
             .ToListAsync(cancellationToken);
     }
@@ -54,4 +56,3 @@ public sealed class ServerRepository(AppDbContext database) : IServerRepository
         await database.SaveChangesAsync(cancellationToken);
     }
 }
-
