@@ -34,5 +34,22 @@ public sealed class PathPolicyTests
 
         Assert.Contains("friends-survival", result, StringComparison.OrdinalIgnoreCase);
     }
-}
 
+    [Fact]
+    public void Validates_a_managed_server_directory()
+    {
+        var policy = new PathPolicy(_root);
+        var directory = Path.Combine(_root, "managed-server");
+
+        Assert.Equal(Path.GetFullPath(directory), policy.ValidateServerDirectory(directory));
+    }
+
+    [Fact]
+    public void Rejects_deleting_the_server_root_or_an_outside_directory()
+    {
+        var policy = new PathPolicy(_root);
+
+        Assert.Throws<InvalidOperationException>(() => policy.ValidateServerDirectory(_root));
+        Assert.Throws<InvalidOperationException>(() => policy.ValidateServerDirectory(Path.GetTempPath()));
+    }
+}

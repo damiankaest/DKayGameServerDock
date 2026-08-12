@@ -40,5 +40,18 @@ public sealed class PathPolicy(string serversRoot) : IPathPolicy
 
         return candidate;
     }
-}
 
+    public string ValidateServerDirectory(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var canonicalRoot = _serversRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!candidate.StartsWith(canonicalRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The server directory is outside the configured game-server root.");
+        }
+
+        return candidate;
+    }
+}

@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using DKay.GameServerDock.Application.Abstractions;
 using DKay.GameServerDock.Application.Models;
 using DKay.GameServerDock.Application.Services;
@@ -31,7 +34,9 @@ public sealed class SteamCmdInstaller(DockOptions options, int appId) : IGameIns
         }
 
         Directory.CreateDirectory(server.InstallDirectory);
-        await reportProgress(new InstallationProgress(5, "runtime", "SteamCMD found."), cancellationToken);
+        await reportProgress(
+            new InstallationProgress(5, "runtime", $"SteamCMD found at '{options.SteamCmdPath}'."),
+            cancellationToken);
 
         var arguments = new CommandArgumentBuilder()
             .AddPair("+force_install_dir", server.InstallDirectory)
@@ -51,6 +56,7 @@ public sealed class SteamCmdInstaller(DockOptions options, int appId) : IGameIns
                 FileName = options.SteamCmdPath,
                 WorkingDirectory = Path.GetDirectoryName(options.SteamCmdPath)!,
                 UseShellExecute = false,
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true
@@ -61,15 +67,44 @@ public sealed class SteamCmdInstaller(DockOptions options, int appId) : IGameIns
             process.StartInfo.ArgumentList.Add(argument);
         }
 
-        process.Start();
-        var outputTask = PumpAsync(process.StandardOutput, reportProgress, cancellationToken);
-        var errorTask = PumpAsync(process.StandardError, reportProgress, cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        if (!process.Start())
+        {
+            throw new InvalidOperationException("Windows refused to start SteamCMD.");
+        }
+
+        var recentOutput = new ConcurrentQueue<string>();
+        await reportProgress(
+            new InstallationProgress(10, "launch", $"SteamCMD process {process.Id} started for app {appId}."),
+            cancellationToken);
+        var outputTask = PumpAsync(process.StandardOutput, "stdout", recentOutput, reportProgress, cancellationToken);
+        var errorTask = PumpAsync(process.StandardError, "stderr", recentOutput, reportProgress, cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken)
+                .WaitAsync(TimeSpan.FromMinutes(45), cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            await reportProgress(
+                new InstallationProgress(90, "timeout", "SteamCMD did not exit within 45 minutes; stopping it."),
+                CancellationToken.None);
+            await TerminateAsync(process);
+            await DrainAsync(outputTask, errorTask);
+            throw new TimeoutException($"SteamCMD timed out after 45 minutes.{FormatRecentOutput(recentOutput)}");
+        }
+        catch (OperationCanceledException)
+        {
+            await TerminateAsync(process);
+            await DrainAsync(outputTask, errorTask);
+            throw;
+        }
+
         await Task.WhenAll(outputTask, errorTask);
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"SteamCMD exited with code {process.ExitCode}.");
+            throw new InvalidOperationException(
+                $"SteamCMD exited with code {process.ExitCode}.{FormatRecentOutput(recentOutput)}");
         }
 
         await reportProgress(new InstallationProgress(100, "complete", "Steam installation completed."), cancellationToken);
@@ -77,14 +112,82 @@ public sealed class SteamCmdInstaller(DockOptions options, int appId) : IGameIns
 
     private static async Task PumpAsync(
         StreamReader reader,
+        string stream,
+        ConcurrentQueue<string> recentOutput,
         Func<InstallationProgress, CancellationToken, Task> reportProgress,
         CancellationToken cancellationToken)
     {
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
-            var percent = line.Contains("Success!", StringComparison.OrdinalIgnoreCase) ? 95 : 45;
-            await reportProgress(new InstallationProgress(percent, "download", line), cancellationToken);
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var normalized = line.Length <= 2000 ? line.Trim() : line[..2000].Trim();
+            recentOutput.Enqueue($"[{stream}] {normalized}");
+            while (recentOutput.Count > 30 && recentOutput.TryDequeue(out _))
+            {
+            }
+
+            await reportProgress(
+                new InstallationProgress(GetProgress(normalized), stream == "stderr" ? "steamcmd-error" : "download", $"SteamCMD {stream}: {normalized}"),
+                cancellationToken);
+        }
+    }
+
+    private static int GetProgress(string line)
+    {
+        if (line.Contains("Success!", StringComparison.OrdinalIgnoreCase))
+        {
+            return 95;
+        }
+
+        var match = Regex.Match(line, @"progress:\s*(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
+        return match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var progress)
+            ? Math.Clamp(15 + (int)Math.Round(progress * 0.75), 15, 90)
+            : 15;
+    }
+
+    private static string FormatRecentOutput(ConcurrentQueue<string> output)
+    {
+        var tail = output.ToArray().TakeLast(8).ToArray();
+        return tail.Length == 0
+            ? string.Empty
+            : $" Recent output: {string.Join(" | ", tail)}";
+    }
+
+    private static async Task TerminateAsync(Process process)
+    {
+        if (process.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            await process.StandardInput.WriteLineAsync("quit");
+            await process.StandardInput.FlushAsync();
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+            }
+        }
+    }
+
+    private static async Task DrainAsync(params Task[] pumps)
+    {
+        try
+        {
+            await Task.WhenAll(pumps);
+        }
+        catch (OperationCanceledException)
+        {
         }
     }
 }
-

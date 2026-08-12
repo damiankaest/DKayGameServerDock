@@ -89,12 +89,15 @@ public sealed class ServerOrchestrator(
         var server = await GetRequiredAsync(serverId, cancellationToken);
         await TransitionAsync(server, ServerStatus.Updating, cancellationToken);
         var module = modules.GetRequired(server.TemplateId);
+        await events.RecordAsync(
+            ServerEvent.Create(server.Id, ServerEventType.ServerUpdateStarted, "Server update started.", clock.UtcNow),
+            cancellationToken);
 
         try
         {
             await module.Installer.UpdateAsync(
                 server,
-                (progress, token) => events.PublishInstallationProgressAsync(server.Id, progress, token),
+                ReportProgressAsync,
                 cancellationToken);
             await TransitionAsync(server, ServerStatus.Stopped, cancellationToken);
             await events.RecordAsync(
@@ -104,6 +107,24 @@ public sealed class ServerOrchestrator(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await TransitionAsync(server, ServerStatus.Error, cancellationToken, exception.Message);
+            await events.RecordAsync(
+                ServerEvent.Create(server.Id, ServerEventType.ServerUpdateFailed, exception.Message, clock.UtcNow),
+                cancellationToken);
+        }
+
+        return;
+
+        async Task ReportProgressAsync(InstallationProgress progress, CancellationToken token)
+        {
+            await events.RecordAsync(
+                ServerEvent.Create(
+                    server.Id,
+                    ServerEventType.InstallationProgress,
+                    progress.Message,
+                    clock.UtcNow,
+                    JsonSerializer.Serialize(progress)),
+                token);
+            await events.PublishInstallationProgressAsync(server.Id, progress, token);
         }
     }
 
@@ -111,32 +132,86 @@ public sealed class ServerOrchestrator(
     {
         var server = await GetRequiredAsync(serverId, cancellationToken);
         ServerStateMachine.EnsureCanTransition(server.Status, ServerStatus.Starting);
+        await events.RecordAsync(
+            ServerEvent.Create(
+                server.Id,
+                ServerEventType.ServerStartRequested,
+                $"Start requested for {server.TemplateId} on port {server.Port} with a {server.RamLimitMb} MB memory limit.",
+                clock.UtcNow),
+            cancellationToken);
 
         var host = await hostMetrics.GetSnapshotAsync(cancellationToken);
         var validation = ResourceValidator.ValidateStart(host, server.RamLimitMb);
         if (!validation.IsValid)
         {
+            await events.RecordAsync(
+                ServerEvent.Create(server.Id, ServerEventType.ServerStartProgress, $"Resource validation failed: {validation.Reason}", clock.UtcNow),
+                cancellationToken);
             throw new InvalidOperationException(validation.Reason);
         }
+
+        await events.RecordAsync(
+            ServerEvent.Create(
+                server.Id,
+                ServerEventType.ServerStartProgress,
+                $"Resource validation passed. Host has {host.AvailableMemoryBytes / 1024 / 1024} MB available memory.",
+                clock.UtcNow),
+            cancellationToken);
 
         await TransitionAsync(server, ServerStatus.Starting, cancellationToken);
 
         try
         {
             var module = modules.GetRequired(server.TemplateId);
-            var snapshot = await processes.StartAsync(server, module.BuildLaunchSpec(server), cancellationToken);
+            var launchSpec = module.BuildLaunchSpec(server);
+            await events.RecordAsync(
+                ServerEvent.Create(
+                    server.Id,
+                    ServerEventType.ServerStartProgress,
+                    $"Launching {Path.GetFileName(launchSpec.FileName)} from '{launchSpec.WorkingDirectory}'.",
+                    clock.UtcNow),
+                cancellationToken);
+            var snapshot = await processes.StartAsync(server, launchSpec, cancellationToken);
             server.TrackProcess(snapshot.ProcessId, snapshot.ExitCode, clock.UtcNow);
             await TransitionAsync(server, ServerStatus.Running, cancellationToken);
             await events.RecordAsync(
-                ServerEvent.Create(server.Id, ServerEventType.ServerStarted, "Server started.", clock.UtcNow),
+                ServerEvent.Create(server.Id, ServerEventType.ServerStarted, $"Server started with process ID {snapshot.ProcessId}.", clock.UtcNow),
                 cancellationToken);
             return snapshot;
         }
-        catch
+        catch (Exception exception)
         {
-            await TransitionAsync(server, ServerStatus.Error, cancellationToken, "The server process could not be started.");
+            await TransitionAsync(server, ServerStatus.Error, cancellationToken, exception.Message);
+            await events.RecordAsync(
+                ServerEvent.Create(server.Id, ServerEventType.ServerStartProgress, $"Start failed: {exception.Message}", clock.UtcNow),
+                cancellationToken);
             throw;
         }
+    }
+
+    public async Task DeleteAsync(Guid serverId, bool deleteFiles, CancellationToken cancellationToken)
+    {
+        var server = await GetRequiredAsync(serverId, cancellationToken);
+        if (server.Status is not (ServerStatus.Stopped or ServerStatus.Crashed or ServerStatus.Error))
+        {
+            throw new InvalidOperationException($"Stop the server before deleting it (current state: {server.Status}).");
+        }
+
+        if (processes.GetSnapshot(server.Id).IsRunning)
+        {
+            throw new InvalidOperationException("The server process is still running. Stop it before deleting the instance.");
+        }
+
+        if (deleteFiles)
+        {
+            var directory = paths.ValidateServerDirectory(server.InstallDirectory);
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        await servers.DeleteAsync(server, cancellationToken);
     }
 
     public async Task<ProcessSnapshot> StopAsync(Guid serverId, bool force, CancellationToken cancellationToken)

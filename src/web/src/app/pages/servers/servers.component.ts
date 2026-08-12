@@ -20,6 +20,7 @@ export class ServersComponent {
   readonly settings = signal<Record<string, string>>({});
   readonly showCreate = signal(false);
   readonly saving = signal(false);
+  readonly actioning = signal('');
   readonly error = signal('');
   readonly form = this.formBuilder.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
@@ -103,9 +104,24 @@ export class ServersComponent {
   }
 
   action(server: GameServer, action: 'start' | 'stop' | 'restart'): void {
-    this.api.serverAction(server.id, action).subscribe({
+    this.error.set('');
+    this.actioning.set(`${server.id}:${action}`);
+    this.api.serverAction(server.id, action).pipe(finalize(() => this.actioning.set(''))).subscribe({
       next: () => this.reload(),
       error: error => this.error.set(error.error?.detail ?? 'The action failed.')
+    });
+  }
+
+  delete(server: GameServer): void {
+    if (!window.confirm(`Delete "${server.name}" and all files in its managed server directory? This cannot be undone.`)) {
+      return;
+    }
+
+    this.error.set('');
+    this.actioning.set(`${server.id}:delete`);
+    this.api.deleteServer(server.id).pipe(finalize(() => this.actioning.set(''))).subscribe({
+      next: () => this.servers.update(items => items.filter(item => item.id !== server.id)),
+      error: error => this.error.set(error.error?.detail ?? 'The server could not be deleted.')
     });
   }
 

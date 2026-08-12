@@ -41,6 +41,7 @@ public static class ServerEndpoints
         group.MapPost("/{id:guid}/restart", (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
             orchestrator.RestartAsync(id, token));
         group.MapPost("/{id:guid}/update", QueueUpdateAsync);
+        group.MapDelete("/{id:guid}", DeleteAsync);
         group.MapPut("/{id:guid}/publication", UpdatePublicationAsync);
         group.MapGet("/{id:guid}/cs2-mode", (Guid id, Cs2ModeService modes, CancellationToken token) =>
             modes.GetStateAsync(id, token));
@@ -109,11 +110,29 @@ public static class ServerEndpoints
 
     private static async Task<IResult> QueueUpdateAsync(
         Guid id,
+        IServerRepository servers,
         IServerWorkQueue queue,
         CancellationToken cancellationToken)
     {
+        var server = await servers.FindAsync(id, cancellationToken)
+            ?? throw new KeyNotFoundException($"Server '{id}' was not found.");
+        if (server.Status is not (ServerStatus.Stopped or ServerStatus.Crashed or ServerStatus.Error))
+        {
+            throw new InvalidOperationException($"Stop the server before updating it (current state: {server.Status}).");
+        }
+
         await queue.EnqueueAsync(new ServerWorkItem(id, ServerWorkKind.Update), cancellationToken);
         return Results.Accepted();
+    }
+
+    private static async Task<IResult> DeleteAsync(
+        Guid id,
+        bool? deleteFiles,
+        ServerOrchestrator orchestrator,
+        CancellationToken cancellationToken)
+    {
+        await orchestrator.DeleteAsync(id, deleteFiles ?? true, cancellationToken);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> UpdatePublicationAsync(
