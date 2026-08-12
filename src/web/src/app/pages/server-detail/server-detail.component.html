@@ -15,7 +15,7 @@
       <section class="install-banner"><div><strong>{{ progress()?.message || 'Preparing installation…' }}</strong><small>{{ progress()?.stage || current.status }}</small></div><b>{{ progress()?.percent || 0 }}%</b><div class="meter"><i [style.width.%]="progress()?.percent || 0"></i></div></section>
     }
 
-    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="tab.set('overview')">Overview</button><button [class.active]="tab() === 'console'" (click)="tab.set('console')">Console</button><button [class.active]="tab() === 'players'" (click)="tab.set('players')">Players <i>{{ current.players.length }}</i></button></nav>
+    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="tab.set('overview')">Overview</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'modes'" (click)="tab.set('modes')">Modes & maps</button> }<button [class.active]="tab() === 'console'" (click)="tab.set('console')">Console</button><button [class.active]="tab() === 'players'" (click)="tab.set('players')">Players <i>{{ current.players.length }}</i></button></nav>
 
     @if (tab() === 'overview') {
       <div class="detail-grid">
@@ -50,6 +50,75 @@
           <p class="readiness-note">Publishing changes only the guest listing. Windows Firewall and FRITZ!Box port forwarding remain explicit security steps.</p>
         </section>
         <section class="panel full"><header><h2>Recent activity</h2><button class="secondary-button small" (click)="action('update')">Update server</button></header><div class="activity-list">@for (log of logs().slice(-8).reverse(); track log.id + log.occurredAt) { <div><i [attr.data-event]="log.type"></i><span><strong>{{ log.message }}</strong><small>{{ log.type }} · {{ log.occurredAt | date:'short' }}</small></span></div> }</div></section>
+      </div>
+    } @else if (tab() === 'modes') {
+      <div class="mode-workbench">
+        <section class="panel full mode-intro">
+          <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' ? 'Ready to configure' : 'Stop required' }}</span></header>
+          <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
+        </section>
+
+        @if (modeCatalog(); as catalog) {
+          <section class="preset-grid">
+            @for (preset of catalog.presets; track preset.id) {
+              <button type="button" class="preset-card" [class.selected]="selectedPresetId() === preset.id" (click)="selectPreset(preset.id)">
+                <span>{{ preset.icon }}</span><small>{{ preset.category }}</small><strong>{{ preset.name }}</strong><p>{{ preset.description }}</p>
+                <code>{{ preset.mapPrefixes.join(' · ') }}</code>
+              </button>
+            }
+          </section>
+
+          @if (selectedPreset(); as preset) {
+            <section class="panel mode-config-panel">
+              <header><div><p class="eyebrow">ACTIVE EDITOR</p><h2>{{ preset.name }} profile</h2></div><span class="mode-package-count">{{ preset.recommendedPackageIds.length }} managed mods</span></header>
+              <div class="mode-form-grid">
+                <label>Map name<input maxlength="64" placeholder="surf_utopia_njv" [value]="modeMapName()" (input)="updateModeText('map', $event)" /><small>Letters, digits, underscores and hyphens only.</small></label>
+                <label>Steam Workshop ID <em>optional</em><input inputmode="numeric" placeholder="3072851041" [value]="modeWorkshopId()" (input)="updateModeText('workshop', $event)" /><small>The server starts this Workshop item instead of a stock map.</small></label>
+                <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
+                <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
+                @for (setting of preset.settings; track setting.key) {
+                  @if (setting.editable) {
+                    <label>{{ setting.label }}
+                      @if (setting.type === 'boolean') {
+                        <select [value]="modeOverrides()[setting.key]" (change)="updateModeOverride(setting.key, $event)"><option value="1">Enabled</option><option value="0">Disabled</option></select>
+                      } @else {
+                        <input type="number" [step]="setting.type === 'integer' ? '1' : 'any'" [min]="setting.minimum" [max]="setting.maximum" [value]="modeOverrides()[setting.key]" (input)="updateModeOverride(setting.key, $event)" />
+                      }
+                      <small>{{ setting.description }}</small>
+                    </label>
+                  }
+                }
+              </div>
+              <div class="mode-apply-row">
+                <label class="check-row"><input type="checkbox" [checked]="modeInstallPackages()" (change)="modeInstallPackages.set($any($event.target).checked)" /><span><b>Install trusted preset stack</b><small>Queues maintained packages and dependencies after writing the config.</small></span></label>
+                <button class="primary-button" type="button" [disabled]="modeSaving() || (current.status !== 'Stopped' && current.status !== 'Crashed' && current.status !== 'Error') || !modeMapName().trim()" (click)="applyModePreset()">{{ modeSaving() ? 'Applying…' : 'Apply & activate' }}</button>
+              </div>
+            </section>
+          }
+
+          @if (modeState(); as state) {
+            <section class="panel mode-profiles-panel">
+              <header><div><p class="eyebrow">PER-MAP PROFILES</p><h2>Configured maps</h2></div><small>{{ state.profiles.length }} saved</small></header>
+              <div class="profile-list">
+                @for (profile of state.profiles; track profile.id) {
+                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? 'Workshop ' + profile.workshopId : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
+                } @empty { <div class="empty-state compact"><h3>No map profiles yet</h3><p>Pick a preset above and apply it to your first map.</p></div> }
+              </div>
+            </section>
+
+            <section class="panel mode-packages-panel">
+              <header><div><p class="eyebrow">TRUSTED CATALOG</p><h2>Mod packages</h2></div><small>Latest upstream releases</small></header>
+              <div class="package-list">
+                @for (package of state.packages; track package.id) {
+                  <article [class.experimental]="package.experimental"><span class="package-state" [class.installed]="package.installed">{{ package.installed ? '✓' : package.automaticInstall ? '↓' : '!' }}</span><div><strong>{{ package.name }} @if (package.experimental) { <em>experimental</em> }</strong><small>{{ package.kind }} · {{ package.publisher }}</small><p>{{ package.description }}</p><a [href]="package.projectUrl" target="_blank" rel="noreferrer">View upstream source ↗</a></div><div class="package-action">@if (package.installed) { <code>{{ package.installedVersion || 'installed' }}</code> } @if (package.automaticInstall) { <button class="secondary-button small" type="button" [disabled]="packageQueueing() !== '' || (current.status !== 'Stopped' && current.status !== 'Crashed' && current.status !== 'Error')" (click)="installPackage(package.id)">{{ packageQueueing() === package.id ? 'Queueing…' : package.installed ? 'Update' : 'Install' }}</button> } @else { <span>Manual only</span> }</div></article>
+                }
+              </div>
+              <p class="readiness-note">CS2 updates can temporarily break native or managed plugins. Package updates remain explicit and every upstream is visible before installation.</p>
+            </section>
+          }
+        } @else {
+          <div class="skeleton-block tall"></div>
+        }
       </div>
     } @else if (tab() === 'console') {
       <section class="console-panel"><header><div><i></i><i></i><i></i><span>live console</span></div><small>{{ current.status }}</small></header><div class="console-output">@for (log of consoleLogs(); track log.occurredAt + log.message) { <p><time>{{ log.occurredAt | date:'HH:mm:ss' }}</time><span>{{ log.message }}</span></p> } @empty { <p class="console-empty">Waiting for server output…</p> }</div><form (submit)="$event.preventDefault(); sendCommand()"><span>›</span><input placeholder="Enter server command" [value]="command()" (input)="updateCommand($event)" [disabled]="current.status !== 'Running'" /><button type="submit" [disabled]="current.status !== 'Running'">Send</button></form></section>

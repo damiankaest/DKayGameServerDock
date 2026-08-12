@@ -14,6 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/DKay.GameServerDock.Application/DKay.GameServerDock.Application.csproj" />
     <ProjectReference Include="../../src/DKay.GameServerDock.Domain/DKay.GameServerDock.Domain.csproj" />
+    <ProjectReference Include="../../src/DKay.GameServerDock.Infrastructure/DKay.GameServerDock.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
-

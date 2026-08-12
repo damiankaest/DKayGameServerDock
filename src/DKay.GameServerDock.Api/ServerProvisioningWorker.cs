@@ -30,9 +30,17 @@ public sealed class ServerProvisioningWorker(
                 {
                     await orchestrator.InstallAsync(item.ServerId, stoppingToken);
                 }
-                else
+                else if (item.Kind == ServerWorkKind.Update)
                 {
                     await orchestrator.UpdateAsync(item.ServerId, stoppingToken);
+                }
+                else
+                {
+                    var modes = scope.ServiceProvider.GetRequiredService<Cs2ModeService>();
+                    await modes.InstallPackageAsync(
+                        item.ServerId,
+                        item.Argument ?? throw new InvalidOperationException("The CS2 package id is missing."),
+                        stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

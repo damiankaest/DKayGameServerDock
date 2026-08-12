@@ -18,6 +18,8 @@ The project is independent from CouchClash. A later CouchClash integration can u
 - Server creation with background installation progress through SignalR
 - Paper stable-build download through PaperMC's current v3 download service
 - CS2 installation/update through a configured SteamCMD executable
+- Per-map CS2 presets for Classic, Surf, KZ, Bhop, ScoutzKnivez and RPG-ready arenas
+- Trusted managed installation for Metamod, CounterStrikeSharp and selected movement plugins
 - Native process start, graceful stop, force kill and restart
 - Per-process PID, CPU, memory, uptime and exit code
 - Persistent stdout/stderr capture and live web console
@@ -118,19 +120,23 @@ Example:
 
 No RCON password or administrator password belongs in the repository. Game-specific secrets are removed from API responses and are never written to application logs.
 
-## Publish for Windows
+## Install on Windows (recommended)
+
+Download `DKayGameServerDock-win-x64.zip` from the newest [GitHub Release](https://github.com/damiankaest/DKayGameServerDock/releases), extract it and double-click **Setup.cmd**. The guided setup installs the self-contained application as a restricted Windows service, configures storage and LAN access, installs SteamCMD for CS2, optionally installs Java for Minecraft, optionally configures the separate guest portal and validates the running service. The server PC needs neither .NET nor Node.js.
+
+Read the complete [Windows installation guide](docs/install-windows.md). For a FRITZ!Box 5690 Pro, setup shows the remaining explicit port-forward rules; it never enables UPnP or exposes the administrator panel.
+
+## Build a Windows package from source
 
 From an elevated PowerShell terminal:
 
 ```powershell
 .\scripts\test-windows-host.ps1 -IncludeBuildTools
-.\scripts\publish-windows.ps1
-.\scripts\install-windows-service.ps1 -OpenLanFirewall
+.\scripts\package-windows.ps1
+.\artifacts\package-win-x64\Setup.cmd
 ```
 
-The publish script builds Angular, copies it into the API's static assets and creates a self-contained `win-x64` package in `artifacts\win-x64`. The installation script safely stops an existing service during updates, registers automatic recovery, optionally opens a LAN-only firewall rule and waits for `/health` before reporting success. See the [first-run checklist](docs/first-run-checklist.md) and [Windows hosting guide](docs/windows-hosting.md).
-
-To add the isolated read-only friend portal later, reinstall with `-EnablePublicPortal -PublicHost 'your-name.myfritz.net'`. Follow [docs/fritzbox-public-access.md](docs/fritzbox-public-access.md). Never forward admin port `5080` or configure the server PC as an exposed host.
+The package script builds Angular, publishes the API self-contained, creates the click-to-run wizard and writes a SHA-256 checksum. Tagged commits run the Windows release workflow and attach the same ZIP to GitHub Releases. See the [first-run checklist](docs/first-run-checklist.md) and [Windows operations guide](docs/windows-hosting.md).
 
 ## First Minecraft Paper server
 
@@ -153,6 +159,10 @@ The installer uses PaperMC's stable channel and writes `eula.txt` plus a minimal
 
 CS2 uses Steam app ID `730`. The generated password lives in `game\csgo\cfg\dkay-server.cfg` inside the instance; it is not passed on the process command line.
 
+After installation, open the server's **Modes & maps** tab. Pick Classic, Surf, KZ, Bhop, ScoutzKnivez or RPG Arena; enter a stock/custom map name or Steam Workshop ID; adjust bots and the allowlisted movement/round settings; then apply the profile while the server is stopped. Each map gets a separate generated cfg and the selected profile controls the next launch.
+
+The automatic mod installer resolves dependencies and downloads only registered HTTPS upstreams. Surf/Bhop can queue Metamod, CounterStrikeSharp, CS2-Tags, Movement Unlocker, RampBugFix and SharpTimer; KZ uses the KZGlobalTeam CS2KZ package. RPG rules are ready, but the known Warcraft package remains manual/experimental until it has a maintained trusted release channel. See [CS2 mode presets and managed mods](docs/cs2-mode-presets.md).
+
 ## Security boundaries
 
 - The web panel binds to the LAN but does not open router ports.
@@ -161,6 +171,9 @@ CS2 uses Steam app ID `730`. The generated password lives in `game\csgo\cfg\dkay
 - Executables and arguments come from registered game modules, not arbitrary user input.
 - `ProcessStartInfo.ArgumentList` keeps arguments separate and `UseShellExecute` is disabled.
 - File operations must go through `IPathPolicy` and stay below an instance root.
+- CS2 presets accept only catalogued ConVars with typed ranges; map/workshop launch values are validated.
+- Managed mod ZIPs are size-limited, staged and rejected on traversal paths, symbolic links or excessive expansion.
+- Mod downloads are restricted to registered GitHub/AlliedModders projects; the API accepts no arbitrary package URL.
 - The service should run without administrator privileges after installation.
 - Do not expose port 5080 directly to the internet. Add TLS and a trusted reverse proxy before any remote-access feature.
 - Guest traffic is accepted only on the separate public listener. Its middleware rejects every path except `/join`, `/api/public/*`, static assets and health.
@@ -171,7 +184,7 @@ CS2 uses Steam app ID `730`. The generated password lives in `game\csgo\cfg\dkay
 2. Editable settings with secret encryption at rest
 3. Manual and scheduled backups with restore validation
 4. Contained file manager with upload/download and text editing
-5. CS2 Workshop maps, Metamod and CounterStrikeSharp inventory
+5. Signed/pinned mod manifests, rollback and compatibility health checks after CS2 updates
 6. Minecraft whitelist, worlds and Paper plugins
 7. Crash backoff, autostart reconciliation and process reattachment
 8. External API tokens for optional CouchClash integration

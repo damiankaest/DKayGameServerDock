@@ -14,6 +14,9 @@ public enum ServerEventType
     PlayerConnected,
     PlayerDisconnected,
     MapChanged,
+    ModePresetApplied,
+    PluginInstalled,
+    PluginInstallFailed,
     ConsoleOutput
 }
 
@@ -40,4 +43,3 @@ public sealed class ServerEvent
             OccurredAt = now
         };
 }
-

@@ -53,7 +53,8 @@ public interface IServerWorkQueue
 public enum ServerWorkKind
 {
     Install,
-    Update
+    Update,
+    InstallCs2Package
 }
 
-public sealed record ServerWorkItem(Guid ServerId, ServerWorkKind Kind);
+public sealed record ServerWorkItem(Guid ServerId, ServerWorkKind Kind, string? Argument = null);

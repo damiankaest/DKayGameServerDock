@@ -30,6 +30,7 @@
             <h2>{{ server.name }}</h2>
           </div>
           <dl>
+            @if (server.mode || server.map) { <div><dt>Mode / map</dt><dd>{{ server.mode || 'Custom' }} · {{ server.map || 'rotation' }}</dd></div> }
             <div><dt>Network</dt><dd>{{ server.protocols.join(' + ') }} · :{{ server.publicPort }}</dd></div>
             <div><dt>Slots</dt><dd>{{ server.maxPlayers || 'Game default' }}</dd></div>
             <div><dt>Access</dt><dd>{{ server.passwordProtected ? 'Password protected' : 'Open to friends' }}</dd></div>
