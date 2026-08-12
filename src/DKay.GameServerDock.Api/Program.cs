@@ -62,6 +62,9 @@ await using (var scope = app.Services.CreateAsyncScope())
     var databaseFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
     await using var database = await databaseFactory.CreateDbContextAsync();
     await database.Database.EnsureCreatedAsync();
+    // EnsureCreated does not add newly introduced indexes to an existing SQLite database.
+    await database.Database.ExecuteSqlRawAsync(
+        """CREATE INDEX IF NOT EXISTS "IX_ServerEvents_ServerId_Id" ON "ServerEvents" ("ServerId", "Id" DESC);""");
 }
 
 app.UseMiddleware<ApiExceptionMiddleware>();

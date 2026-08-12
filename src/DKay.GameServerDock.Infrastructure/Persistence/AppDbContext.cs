@@ -28,7 +28,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(serverEvent => serverEvent.Id);
             entity.Property(serverEvent => serverEvent.Type).HasConversion<string>().HasMaxLength(64);
             entity.Property(serverEvent => serverEvent.Message).HasMaxLength(4000);
-            entity.HasIndex(serverEvent => new { serverEvent.ServerId, serverEvent.OccurredAt });
+            entity.HasIndex(serverEvent => new { serverEvent.ServerId, serverEvent.Id });
         });
 
         modelBuilder.Entity<LocalUser>(entity =>
@@ -40,4 +40,3 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         });
     }
 }
-

@@ -18,6 +18,8 @@ export class ServerDetailComponent implements OnDestroy {
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   readonly server = signal<GameServer | null>(null);
   readonly logs = signal<ServerEvent[]>([]);
+  readonly logsLoading = signal(true);
+  readonly logsError = signal('');
   readonly tab = signal<'overview' | 'modes' | 'console' | 'players'>('overview');
   readonly command = signal('');
   readonly progress = signal<{ percent: number; stage: string; message: string } | null>(null);
@@ -56,14 +58,24 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   load(): void {
-    forkJoin({ server: this.api.server(this.id), logs: this.api.logs(this.id) }).subscribe({
-      next: result => {
-        this.server.set(result.server);
-        this.publicationPort.set(result.server.publication.publicPort);
-        this.logs.set([...result.logs].reverse());
-        if (result.server.templateId === 'counter-strike-2') this.loadCs2Modes();
+    // Render the server as soon as its request completes. Logs are optional supporting data and
+    // must never keep the complete detail page in its loading state.
+    this.loadServer(true);
+    this.loadLogs();
+  }
+
+  private loadLogs(): void {
+    this.logsLoading.set(true);
+    this.logsError.set('');
+    this.api.logs(this.id).subscribe({
+      next: logs => {
+        this.logs.set([...logs].reverse());
+        this.logsLoading.set(false);
       },
-      error: error => this.error.set(error.error?.detail ?? 'The server could not be loaded.')
+      error: error => {
+        this.logsLoading.set(false);
+        this.logsError.set(error.error?.detail ?? 'Recent activity could not be loaded. Live server controls remain available.');
+      }
     });
   }
 
@@ -165,10 +177,14 @@ export class ServerDetailComponent implements OnDestroy {
     });
   }
 
-  loadServer(): void {
-    this.api.server(this.id).subscribe(server => {
-      this.server.set(server);
-      if (this.publicationPort() === null) this.publicationPort.set(server.publication.publicPort);
+  loadServer(loadModes = false): void {
+    this.api.server(this.id).subscribe({
+      next: server => {
+        this.server.set(server);
+        if (this.publicationPort() === null) this.publicationPort.set(server.publication.publicPort);
+        if (loadModes && server.templateId === 'counter-strike-2') this.loadCs2Modes();
+      },
+      error: error => this.error.set(error.error?.detail ?? 'The server could not be loaded.')
     });
   }
 
