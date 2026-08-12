@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Runtime = 'win-x64',
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [bool]$SelfContained = $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,12 @@ $webRoot = Join-Path $repositoryRoot 'src\web'
 $apiRoot = Join-Path $repositoryRoot 'src\DKay.GameServerDock.Api'
 $wwwRoot = Join-Path $apiRoot 'wwwroot'
 $artifactRoot = Join-Path $repositoryRoot "artifacts\$Runtime"
+
+foreach ($command in @('npm', 'dotnet')) {
+    if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
+        throw "Required build tool '$command' was not found on PATH."
+    }
+}
 
 Push-Location $webRoot
 try {
@@ -29,8 +36,7 @@ Copy-Item -Path (Join-Path $webRoot 'dist\web\browser\*') -Destination $wwwRoot 
 dotnet publish (Join-Path $apiRoot 'DKay.GameServerDock.Api.csproj') `
     --configuration $Configuration `
     --runtime $Runtime `
-    --self-contained false `
+    --self-contained $SelfContained `
     --output $artifactRoot
 
-Write-Host "Published DKayGameServerDock to $artifactRoot"
-
+Write-Host "Published DKayGameServerDock to $artifactRoot (self-contained: $SelfContained)"

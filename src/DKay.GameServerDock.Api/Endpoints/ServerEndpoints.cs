@@ -11,6 +11,7 @@ public static class ServerEndpoints
     public static IEndpointRouteBuilder MapServerEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/api/host", (IHostMetricsProvider host, CancellationToken token) => host.GetSnapshotAsync(token));
+        endpoints.MapGet("/api/host/readiness", (IHostReadinessProvider readiness) => readiness.GetSnapshot());
         endpoints.MapGet("/api/game-templates", (IGameModuleRegistry modules) => modules.GetTemplates());
         endpoints.MapGet("/api/activity", async (IServerRepository servers, int? take, CancellationToken token) =>
             Results.Ok(await servers.GetEventsAsync(null, take ?? 100, token)));
@@ -149,4 +150,3 @@ public static class ServerEndpoints
 
     private sealed record ConsoleCommandRequest(string Command);
 }
-

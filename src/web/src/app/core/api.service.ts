@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CreateServerRequest, GameServer, GameTemplate, HostSnapshot, ServerEvent } from './models';
+import { CreateServerRequest, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, ServerEvent } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -26,6 +26,10 @@ export class ApiService {
 
   host(): Observable<HostSnapshot> {
     return this.http.get<HostSnapshot>('/api/host');
+  }
+
+  hostReadiness(): Observable<HostReadinessSnapshot> {
+    return this.http.get<HostReadinessSnapshot>('/api/host/readiness');
   }
 
   templates(): Observable<GameTemplate[]> {
@@ -60,4 +64,3 @@ export class ApiService {
     return this.http.get<ServerEvent[]>('/api/activity', { params: { take } });
   }
 }
-

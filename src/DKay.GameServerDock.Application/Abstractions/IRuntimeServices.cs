@@ -16,6 +16,11 @@ public interface IHostMetricsProvider
     Task<HostSnapshot> GetSnapshotAsync(CancellationToken cancellationToken);
 }
 
+public interface IHostReadinessProvider
+{
+    HostReadinessSnapshot GetSnapshot();
+}
+
 public interface IPathPolicy
 {
     string ResolveServerDirectory(string serverName, Guid serverId);

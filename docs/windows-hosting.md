@@ -13,7 +13,7 @@ All paths can be overridden. Do not store game files below the Git checkout.
 
 ## Prepare the host
 
-1. Install the .NET 10 ASP.NET Core Runtime and Node.js only if building on the host.
+1. Install the .NET 10 SDK and Node.js only when building on the host. The default publish is self-contained, so the installed service does not require a separate .NET runtime.
 2. Install SteamCMD into a dedicated tools directory.
 3. Install the Java version required by the desired Paper build.
 4. Create a local service account, for example `DKayDockService`.
@@ -25,11 +25,12 @@ All paths can be overridden. Do not store game files below the Git checkout.
 Run from an elevated PowerShell terminal in the repository:
 
 ```powershell
+.\scripts\test-windows-host.ps1 -IncludeBuildTools
 .\scripts\publish-windows.ps1
-.\scripts\install-windows-service.ps1
+.\scripts\install-windows-service.ps1 -OpenLanFirewall
 ```
 
-The default service listens on `0.0.0.0:5080`. Browse to `http://SERVER-LAN-IP:5080`, create the local administrator and verify host metrics before installing a game.
+The default service listens on `0.0.0.0:5080`. The installation script waits until `/health` responds and can create a Windows Firewall rule limited to the local subnet. Browse to `http://SERVER-LAN-IP:5080`, create the local administrator and open **Host → Run checks** before installing a game.
 
 To run under a dedicated account, update the Windows service in `services.msc` after installation and provide that account's password there. The install script intentionally does not accept credentials.
 
@@ -43,7 +44,7 @@ Open only the ports you actually need on the private network:
 
 Do not create a router port-forward for 5080. The application does not attempt UPnP or router configuration.
 
-Example LAN-only firewall rule; adjust the local subnet:
+If the install script was run without `-OpenLanFirewall`, create the rule manually. Example LAN-only firewall rule; adjust the local subnet:
 
 ```powershell
 New-NetFirewallRule -DisplayName 'DKay Game Server Dock (LAN)' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5080 -RemoteAddress 192.168.0.0/16
@@ -64,5 +65,5 @@ Game server files and application data are outside the publish directory, so app
 - **CS2 installation immediately fails:** verify the service account can execute the exact `DGS_STEAMCMD_PATH` and write to `C:\GameServers`.
 - **Paper installation works but start fails:** run the configured Java executable as the service account and check the required Java major version.
 - **Metrics are empty:** confirm the service account can enumerate fixed drives and network adapters.
+- **Host readiness reports a missing runtime:** set `DGS_JAVA_PATH` or `DGS_STEAMCMD_PATH` as a machine environment variable and restart the Windows service.
 - **A server remains `Running` after a Dock restart:** process reattachment is not in the first MVP; stop the orphaned process through Windows administration before starting it again in the Dock.
-

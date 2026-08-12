@@ -84,6 +84,32 @@ export interface HostSnapshot {
   disks: DiskSnapshot[];
 }
 
+export interface DirectoryReadiness {
+  path: string;
+  exists: boolean;
+  writable: boolean;
+  message: string;
+}
+
+export interface RuntimeReadiness {
+  id: string;
+  name: string;
+  purpose: string;
+  configuredValue: string;
+  resolvedPath: string | null;
+  available: boolean;
+  version: string | null;
+  message: string;
+}
+
+export interface HostReadinessSnapshot {
+  ready: boolean;
+  dataRoot: DirectoryReadiness;
+  serversRoot: DirectoryReadiness;
+  runtimes: RuntimeReadiness[];
+  checkedAt: string;
+}
+
 export interface ServerEvent {
   id: number;
   serverId: string;
@@ -103,4 +129,3 @@ export interface CreateServerRequest {
   ramLimitMb: number;
   settings: Record<string, string>;
 }
-
