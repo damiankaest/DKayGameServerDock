@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { GameServer, ServerEvent } from '../../core/models';
+import { Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, GameServer, ServerEvent } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -18,13 +18,24 @@ export class ServerDetailComponent implements OnDestroy {
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   readonly server = signal<GameServer | null>(null);
   readonly logs = signal<ServerEvent[]>([]);
-  readonly tab = signal<'overview' | 'console' | 'players'>('overview');
+  readonly tab = signal<'overview' | 'modes' | 'console' | 'players'>('overview');
   readonly command = signal('');
   readonly progress = signal<{ percent: number; stage: string; message: string } | null>(null);
   readonly error = signal('');
   readonly publicationPort = signal<number | null>(null);
   readonly publicationSaving = signal(false);
   readonly copied = signal('');
+  readonly modeCatalog = signal<Cs2ModeCatalog | null>(null);
+  readonly modeState = signal<Cs2ModeState | null>(null);
+  readonly selectedPresetId = signal('');
+  readonly modeMapName = signal('');
+  readonly modeWorkshopId = signal('');
+  readonly modeBotQuota = signal(0);
+  readonly modeBotDifficulty = signal(1);
+  readonly modeInstallPackages = signal(true);
+  readonly modeOverrides = signal<Record<string, string>>({});
+  readonly modeSaving = signal(false);
+  readonly packageQueueing = signal('');
 
   constructor() {
     this.load();
@@ -50,8 +61,107 @@ export class ServerDetailComponent implements OnDestroy {
         this.server.set(result.server);
         this.publicationPort.set(result.server.publication.publicPort);
         this.logs.set([...result.logs].reverse());
+        if (result.server.templateId === 'counter-strike-2') this.loadCs2Modes();
       },
       error: error => this.error.set(error.error?.detail ?? 'The server could not be loaded.')
+    });
+  }
+
+  loadCs2Modes(): void {
+    forkJoin({ catalog: this.api.cs2ModeCatalog(), state: this.api.cs2Mode(this.id) }).subscribe({
+      next: result => {
+        this.modeCatalog.set(result.catalog);
+        this.modeState.set(result.state);
+        const active = result.state.profiles.find(profile => profile.id === result.state.activeProfileId);
+        if (active) {
+          this.selectProfile(active);
+        } else if (!this.selectedPresetId() && result.catalog.presets.length) {
+          this.selectPreset(result.catalog.presets[0].id);
+          this.modeMapName.set(this.server()?.settings?.['initialMap'] || 'de_mirage');
+        }
+      },
+      error: error => this.error.set(error.error?.detail ?? 'CS2 mode presets could not be loaded.')
+    });
+  }
+
+  selectedPreset(): Cs2ModePreset | null {
+    return this.modeCatalog()?.presets.find(preset => preset.id === this.selectedPresetId()) ?? null;
+  }
+
+  selectPreset(presetId: string): void {
+    const preset = this.modeCatalog()?.presets.find(item => item.id === presetId);
+    if (!preset) return;
+    this.selectedPresetId.set(preset.id);
+    this.modeOverrides.set(Object.fromEntries(
+      preset.settings.filter(setting => setting.editable).map(setting => [setting.key, setting.defaultValue])
+    ));
+  }
+
+  selectProfile(profile: Cs2ModeProfile): void {
+    this.selectPreset(profile.presetId);
+    this.modeMapName.set(profile.mapName);
+    this.modeWorkshopId.set(profile.workshopId ?? '');
+    this.modeBotQuota.set(profile.botQuota);
+    this.modeBotDifficulty.set(profile.botDifficulty);
+    this.modeOverrides.update(values => ({ ...values, ...profile.overrides }));
+  }
+
+  updateModeText(field: 'map' | 'workshop', event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (field === 'map') this.modeMapName.set(value);
+    else this.modeWorkshopId.set(value);
+  }
+
+  updateModeNumber(field: 'bots' | 'difficulty', event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (field === 'bots') this.modeBotQuota.set(value);
+    else this.modeBotDifficulty.set(value);
+  }
+
+  updateModeOverride(key: string, event: Event): void {
+    this.modeOverrides.update(values => ({ ...values, [key]: (event.target as HTMLInputElement | HTMLSelectElement).value }));
+  }
+
+  applyModePreset(): void {
+    const preset = this.selectedPreset();
+    if (!preset) return;
+    this.error.set('');
+    this.modeSaving.set(true);
+    this.api.applyCs2Mode(this.id, {
+      presetId: preset.id,
+      mapName: this.modeMapName().trim(),
+      workshopId: this.modeWorkshopId().trim() || null,
+      botQuota: this.modeBotQuota(),
+      botDifficulty: this.modeBotDifficulty(),
+      installRecommendedPackages: this.modeInstallPackages(),
+      overrides: this.modeOverrides()
+    }).subscribe({
+      next: result => {
+        this.modeState.set(result.state);
+        this.modeSaving.set(false);
+        if (result.queuedPackageIds.length) {
+          this.progress.set({ percent: 0, stage: 'queued', message: `Queued ${result.queuedPackageIds.length} managed package(s).` });
+        }
+      },
+      error: error => {
+        this.error.set(error.error?.detail ?? 'The map preset could not be applied.');
+        this.modeSaving.set(false);
+      }
+    });
+  }
+
+  installPackage(packageId: string): void {
+    this.error.set('');
+    this.packageQueueing.set(packageId);
+    this.api.installCs2Package(this.id, packageId).subscribe({
+      next: () => {
+        this.packageQueueing.set('');
+        this.progress.set({ percent: 0, stage: 'queued', message: `Queued ${packageId} and its dependencies.` });
+      },
+      error: error => {
+        this.error.set(error.error?.detail ?? 'The package could not be queued.');
+        this.packageQueueing.set('');
+      }
     });
   }
 

@@ -5,7 +5,7 @@ using DKay.GameServerDock.Infrastructure.Games;
 
 namespace DKay.GameServerDock.Infrastructure.Installation;
 
-public sealed class Cs2Installer(DockOptions options) : IGameInstaller
+public sealed class Cs2Installer(DockOptions options, ICs2ModeManager modes) : IGameInstaller
 {
     private readonly SteamCmdInstaller _steam = new(options, 730);
 
@@ -16,6 +16,7 @@ public sealed class Cs2Installer(DockOptions options) : IGameInstaller
     {
         await _steam.InstallAsync(server, reportProgress, cancellationToken);
         await WriteServerConfigAsync(server, cancellationToken);
+        await modes.RepairAfterGameUpdateAsync(server, cancellationToken);
     }
 
     public async Task UpdateAsync(
@@ -25,6 +26,7 @@ public sealed class Cs2Installer(DockOptions options) : IGameInstaller
     {
         await _steam.UpdateAsync(server, reportProgress, cancellationToken);
         await WriteServerConfigAsync(server, cancellationToken);
+        await modes.RepairAfterGameUpdateAsync(server, cancellationToken);
     }
 
     private static async Task WriteServerConfigAsync(GameServerInstance server, CancellationToken cancellationToken)
@@ -41,11 +43,19 @@ public sealed class Cs2Installer(DockOptions options) : IGameInstaller
             $"sv_password \"{password}\"",
             $"sv_visiblemaxplayers {maxPlayers}",
             "sv_lan 0",
-            "log on"
+            "log on",
+            "exec dkay-mode.cfg"
         };
         await File.WriteAllLinesAsync(Path.Combine(configDirectory, "dkay-server.cfg"), lines, cancellationToken);
+        var modeConfigPath = Path.Combine(configDirectory, "dkay-mode.cfg");
+        if (!File.Exists(modeConfigPath))
+        {
+            await File.WriteAllLinesAsync(
+                modeConfigPath,
+                ["// No managed map preset is active yet."],
+                cancellationToken);
+        }
     }
 
     private static string Escape(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
 }
-

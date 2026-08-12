@@ -17,6 +17,11 @@ public static class ServerEndpoints
         endpoints.MapGet("/api/host", (IHostMetricsProvider host, CancellationToken token) => host.GetSnapshotAsync(token));
         endpoints.MapGet("/api/host/readiness", (IHostReadinessProvider readiness) => readiness.GetSnapshot());
         endpoints.MapGet("/api/game-templates", (IGameModuleRegistry modules) => modules.GetTemplates());
+        endpoints.MapGet("/api/cs2/mode-presets", (Cs2ModeService modes) => Results.Ok(new
+        {
+            Presets = modes.Presets,
+            Packages = modes.Packages
+        }));
         endpoints.MapGet("/api/public/servers", PublicServersAsync)
             .AllowAnonymous()
             .RequireRateLimiting("public-guest");
@@ -37,6 +42,10 @@ public static class ServerEndpoints
             orchestrator.RestartAsync(id, token));
         group.MapPost("/{id:guid}/update", QueueUpdateAsync);
         group.MapPut("/{id:guid}/publication", UpdatePublicationAsync);
+        group.MapGet("/{id:guid}/cs2-mode", (Guid id, Cs2ModeService modes, CancellationToken token) =>
+            modes.GetStateAsync(id, token));
+        group.MapPut("/{id:guid}/cs2-mode", ApplyCs2ModeAsync);
+        group.MapPost("/{id:guid}/cs2-packages/{packageId}/install", QueueCs2PackageAsync);
         group.MapPost("/{id:guid}/command", SendCommandAsync);
         group.MapGet("/{id:guid}/players", async (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
             Results.Ok((await orchestrator.GetRuntimeStatusAsync(id, token)).Players));
@@ -131,6 +140,37 @@ public static class ServerEndpoints
         return Results.Ok(ToPublicationResponse(publication, dockOptions));
     }
 
+    private static async Task<IResult> ApplyCs2ModeAsync(
+        Guid id,
+        ApplyCs2ModePresetRequest request,
+        Cs2ModeService modes,
+        IServerWorkQueue queue,
+        CancellationToken cancellationToken)
+    {
+        var result = await modes.ApplyPresetAsync(id, request, cancellationToken);
+        foreach (var packageId in result.QueuedPackageIds)
+        {
+            await queue.EnqueueAsync(new ServerWorkItem(id, ServerWorkKind.InstallCs2Package, packageId), cancellationToken);
+        }
+
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> QueueCs2PackageAsync(
+        Guid id,
+        string packageId,
+        Cs2ModeService modes,
+        IServerWorkQueue queue,
+        CancellationToken cancellationToken)
+    {
+        foreach (var item in modes.ResolveAutomaticInstallOrder([packageId]))
+        {
+            await queue.EnqueueAsync(new ServerWorkItem(id, ServerWorkKind.InstallCs2Package, item), cancellationToken);
+        }
+
+        return Results.Accepted();
+    }
+
     private static async Task<IResult> SendCommandAsync(
         Guid id,
         ConsoleCommandRequest request,
@@ -192,6 +232,7 @@ public static class ServerEndpoints
     private static async Task<IResult> PublicServersAsync(
         IServerRepository servers,
         IGameModuleRegistry modules,
+        ICs2ModeManager cs2Modes,
         DockOptions dockOptions,
         CancellationToken cancellationToken)
     {
@@ -214,6 +255,9 @@ public static class ServerEndpoints
             .Select(item =>
             {
                 var descriptor = modules.GetRequired(item.Server.TemplateId).Descriptor;
+                var activeMode = item.Server.TemplateId == "counter-strike-2"
+                    ? cs2Modes.GetActiveProfile(item.Server)
+                    : null;
                 var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(item.Server.SettingsJson) ?? [];
                 var passwordProtected = descriptor.Settings
                     .Where(setting => setting.Secret)
@@ -234,6 +278,8 @@ public static class ServerEndpoints
                     Protocols = descriptor.NetworkProtocols,
                     PasswordProtected = passwordProtected,
                     MaxPlayers = maxPlayers,
+                    Mode = activeMode?.PresetName,
+                    Map = activeMode?.MapName,
                     item.Server.UpdatedAt
                 };
             })
