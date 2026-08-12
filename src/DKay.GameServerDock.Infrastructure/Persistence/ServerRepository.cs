@@ -28,6 +28,17 @@ public sealed class ServerRepository(AppDbContext database) : IServerRepository
         await database.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(GameServerInstance server, CancellationToken cancellationToken)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await database.ServerEvents
+            .Where(serverEvent => serverEvent.ServerId == server.Id)
+            .ExecuteDeleteAsync(cancellationToken);
+        database.Servers.Remove(server);
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public Task<bool> IsPortAllocatedAsync(int port, CancellationToken cancellationToken) =>
         database.Servers.AnyAsync(server => server.Port == port, cancellationToken);
 

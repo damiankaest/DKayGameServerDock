@@ -25,6 +25,7 @@ public interface IPathPolicy
 {
     string ResolveServerDirectory(string serverName, Guid serverId);
     string ResolveChildPath(string serverRoot, string relativePath);
+    string ValidateServerDirectory(string path);
 }
 
 public interface IServerEventSink

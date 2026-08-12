@@ -12,8 +12,9 @@
         <span><small>{{ (server.process.memoryBytes / 1024 / 1024).toFixed(0) }} MB · {{ server.process.cpuPercent.toFixed(1) }}% CPU</small></span>
         <span class="row-actions">
           <a class="secondary-button small" [routerLink]="['/servers', server.id]">Manage</a>
-          @if (server.status === 'Running') { <button class="danger-button small" (click)="action(server, 'stop')">Stop</button> }
-          @else if (server.status === 'Stopped' || server.status === 'Crashed') { <button class="primary-button small" (click)="action(server, 'start')">Start</button> }
+          @if (server.status === 'Running') { <button class="danger-button small" [disabled]="actioning() !== ''" (click)="action(server, 'stop')">{{ actioning() === server.id + ':stop' ? 'Stopping…' : 'Stop' }}</button> }
+          @else if (server.status === 'Stopped' || server.status === 'Crashed') { <button class="primary-button small" [disabled]="actioning() !== ''" (click)="action(server, 'start')">{{ actioning() === server.id + ':start' ? 'Starting…' : 'Start' }}</button> }
+          @if (server.status === 'Stopped' || server.status === 'Crashed' || server.status === 'Error') { <button class="danger-button small" [disabled]="actioning() !== ''" (click)="delete(server)">{{ actioning() === server.id + ':delete' ? 'Deleting…' : 'Delete' }}</button> }
         </span>
       </div>
     } @empty {

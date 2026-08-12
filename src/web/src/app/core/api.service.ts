@@ -52,6 +52,10 @@ export class ApiService {
     return this.http.post(`/api/servers/${id}/${action}`, {});
   }
 
+  deleteServer(id: string, deleteFiles = true): Observable<void> {
+    return this.http.delete<void>(`/api/servers/${id}`, { params: { deleteFiles } });
+  }
+
   updatePublication(id: string, published: boolean, publicPort: number): Observable<ServerPublication> {
     return this.http.put<ServerPublication>(`/api/servers/${id}/publication`, { published, publicPort });
   }

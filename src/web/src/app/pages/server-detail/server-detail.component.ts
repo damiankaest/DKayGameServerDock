@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, inject, OnDestroy, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, GameServer, ServerEvent } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
@@ -14,6 +14,7 @@ import { RealtimeService } from '../../core/realtime.service';
 export class ServerDetailComponent implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly realtime = inject(RealtimeService);
+  private readonly router = inject(Router);
   private readonly id = inject(ActivatedRoute).snapshot.paramMap.get('id')!;
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   readonly server = signal<GameServer | null>(null);
@@ -38,6 +39,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly modeOverrides = signal<Record<string, string>>({});
   readonly modeSaving = signal(false);
   readonly packageQueueing = signal('');
+  readonly actioning = signal('');
 
   constructor() {
     this.load();
@@ -46,8 +48,19 @@ export class ServerDetailComponent implements OnDestroy {
       statusChanged: status => {
         this.server.update(server => server ? { ...server, status } : server);
         this.loadServer();
+        this.loadLogs();
       },
-      installationProgress: progress => this.progress.set(progress)
+      installationProgress: progress => {
+        this.progress.set(progress);
+        this.logs.update(logs => [...logs, {
+          id: 0,
+          serverId: this.id,
+          type: 'InstallationProgress',
+          message: progress.message,
+          dataJson: JSON.stringify(progress),
+          occurredAt: new Date().toISOString()
+        }].slice(-500));
+      }
     }).catch(() => this.error.set('Live updates are temporarily unavailable.'));
     this.refreshTimer = setInterval(() => this.loadServer(), 5000);
   }
@@ -190,9 +203,30 @@ export class ServerDetailComponent implements OnDestroy {
 
   action(action: 'start' | 'stop' | 'restart' | 'kill' | 'update'): void {
     this.error.set('');
-    this.api.serverAction(this.id, action).subscribe({
-      next: () => this.loadServer(),
+    this.actioning.set(action);
+    if (action === 'update') {
+      this.progress.set({ percent: 0, stage: 'queued', message: 'Server update queued…' });
+    }
+    this.api.serverAction(this.id, action).pipe(finalize(() => this.actioning.set(''))).subscribe({
+      next: () => {
+        this.loadServer();
+        this.loadLogs();
+      },
       error: error => this.error.set(error.error?.detail ?? 'The server action failed.')
+    });
+  }
+
+  deleteServer(): void {
+    const server = this.server();
+    if (!server || !window.confirm(`Delete "${server.name}" and all files in its managed server directory? This cannot be undone.`)) {
+      return;
+    }
+
+    this.error.set('');
+    this.actioning.set('delete');
+    this.api.deleteServer(this.id).pipe(finalize(() => this.actioning.set(''))).subscribe({
+      next: () => void this.router.navigate(['/servers']),
+      error: error => this.error.set(error.error?.detail ?? 'The server could not be deleted.')
     });
   }
 
@@ -262,7 +296,13 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   consoleLogs(): ServerEvent[] {
-    return this.logs().filter(log => log.type === 'ConsoleOutput');
+    return this.logs().filter(log =>
+      log.type === 'ConsoleOutput' ||
+      log.type === 'InstallationProgress' ||
+      log.type === 'ServerUpdateStarted' ||
+      log.type === 'ServerUpdateFailed' ||
+      log.type === 'ServerStartRequested' ||
+      log.type === 'ServerStartProgress');
   }
 
   formatBytes(bytes: number): string {

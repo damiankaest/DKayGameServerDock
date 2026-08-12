@@ -6,10 +6,13 @@
     <header class="server-detail-header">
       <div class="server-title"><span class="game-icon xlarge">{{ current.templateIcon }}</span><div><p class="eyebrow">{{ current.templateName }}</p><h1>{{ current.name }}</h1><p class="muted">LAN :{{ current.port }} · PID {{ current.process.processId || '—' }}</p></div></div>
       <div class="detail-actions"><span class="status large" [attr.data-status]="current.status">{{ current.status }}</span>
-        @if (current.status === 'Running') { <button class="secondary-button" (click)="action('restart')">↻ Restart</button><button class="danger-button" (click)="action('stop')">■ Stop</button> }
-        @else if (current.status === 'Stopped' || current.status === 'Crashed') { <button class="primary-button" (click)="action('start')">▶ Start</button> }
+        @if (current.status === 'Running') { <button class="secondary-button" [disabled]="actioning() !== ''" (click)="action('restart')">{{ actioning() === 'restart' ? 'Restarting…' : '↻ Restart' }}</button><button class="danger-button" [disabled]="actioning() !== ''" (click)="action('stop')">{{ actioning() === 'stop' ? 'Stopping…' : '■ Stop' }}</button> }
+        @else if (current.status === 'Stopped' || current.status === 'Crashed') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starting…' : '▶ Start' }}</button> }
+        @if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="danger-button" [disabled]="actioning() !== ''" (click)="deleteServer()">{{ actioning() === 'delete' ? 'Deleting…' : 'Delete' }}</button> }
       </div>
     </header>
+
+    @if (current.lastError) { <p class="error-banner"><strong>Last operation failed:</strong> {{ current.lastError }}</p> }
 
     @if (current.status === 'Installing' || current.status === 'Updating') {
       <section class="install-banner"><div><strong>{{ progress()?.message || 'Preparing installation…' }}</strong><small>{{ progress()?.stage || current.status }}</small></div><b>{{ progress()?.percent || 0 }}%</b><div class="meter"><i [style.width.%]="progress()?.percent || 0"></i></div></section>
@@ -49,7 +52,7 @@
           }
           <p class="readiness-note">Publishing changes only the guest listing. Windows Firewall and FRITZ!Box port forwarding remain explicit security steps.</p>
         </section>
-        <section class="panel full"><header><h2>Recent activity</h2><button class="secondary-button small" (click)="action('update')">Update server</button></header>@if (logsError()) { <p class="publication-warning">{{ logsError() }}</p> } @else if (logsLoading()) { <p class="muted">Loading recent activity…</p> }<div class="activity-list">@for (log of logs().slice(-8).reverse(); track log.id + log.occurredAt) { <div><i [attr.data-event]="log.type"></i><span><strong>{{ log.message }}</strong><small>{{ log.type }} · {{ log.occurredAt | date:'short' }}</small></span></div> }</div></section>
+        <section class="panel full"><header><h2>Recent activity</h2><button class="secondary-button small" [disabled]="actioning() !== '' || (current.status !== 'Stopped' && current.status !== 'Crashed' && current.status !== 'Error')" (click)="action('update')">{{ actioning() === 'update' ? 'Queueing…' : 'Update server' }}</button></header>@if (current.status === 'Running') { <p class="readiness-note">Stop the server before installing an update.</p> }@if (logsError()) { <p class="publication-warning">{{ logsError() }}</p> } @else if (logsLoading()) { <p class="muted">Loading recent activity…</p> }<div class="activity-list">@for (log of logs().slice(-8).reverse(); track log.id + log.occurredAt) { <div><i [attr.data-event]="log.type"></i><span><strong>{{ log.message }}</strong><small>{{ log.type }} · {{ log.occurredAt | date:'short' }}</small></span></div> }</div></section>
       </div>
     } @else if (tab() === 'modes') {
       <div class="mode-workbench">
