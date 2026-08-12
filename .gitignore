@@ -22,7 +22,7 @@ Thumbs.db
 
 ## Runtime data and secrets
 data/
-servers/
+/servers/
 backups/
 appsettings.Local.json
 src/DKay.GameServerDock.Api/wwwroot/

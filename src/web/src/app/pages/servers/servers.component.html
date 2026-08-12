@@ -1,0 +1,62 @@
+<div class="page">
+  <header class="page-header"><div><p class="eyebrow">INSTANCES</p><h1>Game servers</h1><p class="muted">Install, operate and inspect every dedicated server from one place.</p></div><button class="primary-button" type="button" (click)="openCreate()">＋ Create server</button></header>
+  @if (error()) { <p class="error-banner">{{ error() }}</p> }
+
+  <div class="table-card responsive-table">
+    <div class="table-row table-head"><span>Server</span><span>Status</span><span>Address</span><span>Resources</span><span></span></div>
+    @for (server of servers(); track server.id) {
+      <div class="table-row">
+        <span class="server-name-cell"><i class="game-icon">{{ server.templateIcon }}</i><span><strong>{{ server.name }}</strong><small>{{ server.templateName }} · {{ server.version }}</small></span></span>
+        <span><i class="status" [attr.data-status]="server.status">{{ server.status }}</i></span>
+        <span><code>LAN :{{ server.port }}</code></span>
+        <span><small>{{ (server.process.memoryBytes / 1024 / 1024).toFixed(0) }} MB · {{ server.process.cpuPercent.toFixed(1) }}% CPU</small></span>
+        <span class="row-actions">
+          <a class="secondary-button small" [routerLink]="['/servers', server.id]">Manage</a>
+          @if (server.status === 'Running') { <button class="danger-button small" (click)="action(server, 'stop')">Stop</button> }
+          @else if (server.status === 'Stopped' || server.status === 'Crashed') { <button class="primary-button small" (click)="action(server, 'start')">Start</button> }
+        </span>
+      </div>
+    } @empty {
+      <div class="empty-state compact"><h3>No instances installed</h3><p>Create one from the game library.</p></div>
+    }
+  </div>
+</div>
+
+@if (showCreate()) {
+  <div class="modal-layer" role="dialog" aria-modal="true" aria-labelledby="create-title">
+    <button class="modal-backdrop" type="button" aria-label="Close" (click)="closeCreate()"></button>
+    <section class="modal-card">
+      <header><div><p class="eyebrow">PROVISION INSTANCE</p><h2 id="create-title">Create server</h2></div><button class="icon-button" type="button" (click)="closeCreate()">×</button></header>
+      <form [formGroup]="form" (ngSubmit)="create()">
+        <div class="form-grid">
+          <label class="full">Game template
+            <select formControlName="templateId" (change)="selectTemplate($any($event.target).value)">
+              @for (template of templates(); track template.id) { <option [value]="template.id">{{ template.name }}</option> }
+            </select>
+          </label>
+          <label class="full">Instance name<input formControlName="name" /></label>
+          <label>Version<input formControlName="version" placeholder="latest" /></label>
+          <label>Game port<input type="number" formControlName="port" /></label>
+          <label>RAM limit (MB)<input type="number" step="512" formControlName="ramLimitMb" /></label>
+        </div>
+
+        @if (selectedTemplate(); as template) {
+          <div class="template-summary"><span class="game-icon large">{{ template.icon }}</span><div><strong>{{ template.name }}</strong><small>{{ template.installer }} · {{ template.capabilities }}</small></div></div>
+          <div class="form-grid settings-grid">
+            @for (setting of template.settings; track setting.key) {
+              @if (setting.type === 'boolean') {
+                <label class="toggle-field full"><input type="checkbox" [checked]="settings()[setting.key] === 'true'" (change)="setBoolean(setting.key, $event)" /><span></span>{{ setting.label }}</label>
+              } @else if (setting.type === 'select') {
+                <label>{{ setting.label }}<select [value]="settings()[setting.key]" (change)="setSetting(setting.key, $event)">@for (option of setting.options; track option) { <option [value]="option">{{ option }}</option> }</select></label>
+              } @else {
+                <label [class.full]="setting.type === 'text'">{{ setting.label }}<input [type]="setting.type" [value]="settings()[setting.key]" (input)="setSetting(setting.key, $event)" /></label>
+              }
+            }
+          </div>
+        }
+
+        <footer><button class="secondary-button" type="button" (click)="closeCreate()">Cancel</button><button class="primary-button" type="submit" [disabled]="saving()">{{ saving() ? 'Creating…' : 'Create & install' }}</button></footer>
+      </form>
+    </section>
+  </div>
+}
