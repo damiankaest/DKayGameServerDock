@@ -1,2 +1,98 @@
-<div class="page"><header class="page-header"><div><p class="eyebrow">PHYSICAL NODE</p><h1>Host</h1><p class="muted">Operating system, network and capacity reported by the Dock agent.</p></div></header>@if (host(); as item) { <div class="detail-grid"><section class="panel"><header><h2>{{ item.hostName }}</h2><span class="status" data-status="Running">Online</span></header><div class="stats-list"><span><small>Operating system</small><b>{{ item.operatingSystem }}</b></span><span><small>Architecture</small><b>{{ item.architecture }}</b></span><span><small>CPU load</small><b>{{ item.cpuPercent.toFixed(1) }}%</b></span><span><small>Memory available</small><b>{{ gb(item.availableMemoryBytes) }} / {{ gb(item.totalMemoryBytes) }}</b></span></div></section><section class="panel"><header><h2>Network</h2></header><div class="stats-list">@for (address of item.lanAddresses; track address) { <span><small>LAN address</small><b><code>{{ address }}</code></b></span> }</div></section><section class="panel full"><header><h2>Storage</h2></header><div class="disk-list">@for (disk of item.disks; track disk.rootPath) { <div><span><strong>{{ disk.name }}</strong><small>{{ disk.rootPath }}</small></span><b>{{ gb(disk.availableBytes) }} free</b><div class="meter"><i [style.width.%]="(disk.totalBytes - disk.availableBytes) / disk.totalBytes * 100"></i></div></div> }</div></section></div> } @else { <div class="skeleton-block tall"></div> }</div>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">PHYSICAL NODE</p>
+      <h1>Host</h1>
+      <p class="muted">Operating system, network, capacity and first-run readiness reported by the Dock agent.</p>
+    </div>
+    <button class="secondary-button" type="button" [disabled]="loading()" (click)="refresh()">
+      {{ loading() ? 'Checking…' : 'Run checks' }}
+    </button>
+  </header>
 
+  @if (error(); as message) {
+    <div class="error-banner">{{ message }}</div>
+  }
+
+  @if (readiness(); as checks) {
+    <section class="panel readiness-panel">
+      <header>
+        <div>
+          <p class="eyebrow">FIRST-RUN CHECK</p>
+          <h2>Installation readiness</h2>
+        </div>
+        <span class="status large" [attr.data-status]="checks.ready ? 'Running' : 'Error'">
+          {{ checks.ready ? 'Core ready' : 'Needs attention' }}
+        </span>
+      </header>
+
+      <div class="readiness-list">
+        <article>
+          <span class="status-dot" [class.ready]="checks.dataRoot.writable"></span>
+          <div>
+            <strong>Application data</strong>
+            <code class="path-value">{{ checks.dataRoot.path }}</code>
+            <small>{{ checks.dataRoot.message }}</small>
+          </div>
+        </article>
+        <article>
+          <span class="status-dot" [class.ready]="checks.serversRoot.writable"></span>
+          <div>
+            <strong>Game servers</strong>
+            <code class="path-value">{{ checks.serversRoot.path }}</code>
+            <small>{{ checks.serversRoot.message }}</small>
+          </div>
+        </article>
+        @for (runtime of checks.runtimes; track runtime.id) {
+          <article>
+            <span class="status-dot" [class.ready]="runtime.available"></span>
+            <div>
+              <strong>{{ runtime.name }} <small>for {{ runtime.purpose }}</small></strong>
+              <code class="path-value">{{ runtime.resolvedPath || runtime.configuredValue || 'Not configured' }}</code>
+              <small>{{ runtime.message }}</small>
+            </div>
+          </article>
+        }
+      </div>
+      <p class="readiness-note">Java and SteamCMD are game-specific. The Dock itself is ready when both storage paths are writable.</p>
+    </section>
+  }
+
+  @if (host(); as item) {
+    <div class="detail-grid">
+      <section class="panel">
+        <header><h2>{{ item.hostName }}</h2><span class="status" data-status="Running">Online</span></header>
+        <div class="stats-list">
+          <span><small>Operating system</small><b>{{ item.operatingSystem }}</b></span>
+          <span><small>Architecture</small><b>{{ item.architecture }}</b></span>
+          <span><small>CPU load</small><b>{{ item.cpuPercent.toFixed(1) }}%</b></span>
+          <span><small>Memory available</small><b>{{ gb(item.availableMemoryBytes) }} / {{ gb(item.totalMemoryBytes) }}</b></span>
+        </div>
+      </section>
+      <section class="panel">
+        <header><h2>Network</h2></header>
+        <div class="stats-list">
+          @for (address of item.lanAddresses; track address) {
+            <span><small>LAN address</small><b><code>{{ address }}:5080</code></b></span>
+          } @empty {
+            <span><small>LAN address</small><b>Not detected</b></span>
+          }
+        </div>
+      </section>
+      <section class="panel full">
+        <header><h2>Storage</h2></header>
+        <div class="disk-list">
+          @for (disk of item.disks; track disk.rootPath) {
+            <div>
+              <span><strong>{{ disk.name }}</strong><small>{{ disk.rootPath }}</small></span>
+              <b>{{ gb(disk.availableBytes) }} free</b>
+              <div class="meter"><i [style.width.%]="(disk.totalBytes - disk.availableBytes) / disk.totalBytes * 100"></i></div>
+            </div>
+          }
+        </div>
+      </section>
+    </div>
+  } @else if (!error()) {
+    <div class="skeleton-block tall"></div>
+  }
+</div>

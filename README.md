@@ -11,6 +11,7 @@ The project is independent from CouchClash. A later CouchClash integration can u
 - Responsive dark-mode dashboard inspired by modern infrastructure panels
 - Local administrator bootstrap and cookie-based login
 - Live Windows/Linux host CPU, RAM, disk, network and uptime metrics
+- First-run readiness checks for writable storage, Java and SteamCMD
 - Typed game-template catalog with CS2 and Minecraft Paper
 - SQLite persistence for instances, users and server events
 - Server creation with background installation progress through SignalR
@@ -60,7 +61,7 @@ For development:
 For the Windows server host:
 
 - Windows 11 x64
-- .NET 10 ASP.NET Core Runtime (or publish self-contained later)
+- No preinstalled .NET runtime when using the default self-contained Windows publish
 - Java for Minecraft Paper; modern Paper versions may require Java 21 or Java 25 depending on the selected Minecraft version
 - SteamCMD for Counter-Strike 2
 - An unprivileged Windows service account with write access only to the configured data and game-server directories
@@ -118,11 +119,12 @@ No RCON password or administrator password belongs in the repository. Game-speci
 From an elevated PowerShell terminal:
 
 ```powershell
+.\scripts\test-windows-host.ps1 -IncludeBuildTools
 .\scripts\publish-windows.ps1
-.\scripts\install-windows-service.ps1
+.\scripts\install-windows-service.ps1 -OpenLanFirewall
 ```
 
-The publish script builds Angular, copies it into the API's static assets and publishes `win-x64` into `artifacts\win-x64`. The installation script registers the result as an automatic Windows service. Details and firewall guidance are in [docs/windows-hosting.md](docs/windows-hosting.md).
+The publish script builds Angular, copies it into the API's static assets and creates a self-contained `win-x64` package in `artifacts\win-x64`. The installation script safely stops an existing service during updates, registers automatic recovery, optionally opens a LAN-only firewall rule and waits for `/health` before reporting success. See the [first-run checklist](docs/first-run-checklist.md) and [Windows hosting guide](docs/windows-hosting.md).
 
 ## First Minecraft Paper server
 
@@ -174,4 +176,3 @@ CS2 uses Steam app ID `730`. The generated password lives in `game\csgo\cfg\dkay
 - [Paper getting started](https://docs.papermc.io/paper/getting-started/)
 - [Valve CS2 dedicated server guide](https://developer.valvesoftware.com/wiki/Counter-Strike_2/Dedicated_Servers)
 - [Valve SteamCMD guide](https://developer.valvesoftware.com/wiki/SteamCMD)
-

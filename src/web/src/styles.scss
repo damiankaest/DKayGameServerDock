@@ -218,6 +218,20 @@ input:focus, select:focus { border-color: #4b8d72; box-shadow: 0 0 0 3px #4de3a1
 .disk-list small { margin-top: 3px; color: var(--muted); }
 .disk-list .meter { grid-column: 1 / -1; }
 
+.readiness-panel { margin-bottom: 18px; }
+.readiness-panel > header > div h2 { margin-top: 3px; }
+.readiness-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.readiness-list article { display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 11px; align-items: start; padding: 14px; border: 1px solid var(--line-soft); border-radius: 9px; background: #0e141b; }
+.readiness-list article > div { min-width: 0; }
+.readiness-list strong, .readiness-list small, .readiness-list code { display: block; }
+.readiness-list strong { margin-bottom: 7px; font-size: .78rem; }
+.readiness-list strong small { display: inline; color: var(--muted); font-weight: 500; }
+.readiness-list article > div > small { margin-top: 7px; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+.path-value { overflow: hidden; color: #aebbd0; font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
+.status-dot { width: 9px; height: 9px; margin-top: 4px; border: 2px solid #673b42; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 3px #2b171a; }
+.status-dot.ready { border-color: #2e6f52; background: var(--green); box-shadow: 0 0 0 3px #10271f; }
+.readiness-note { margin: 13px 2px 0; color: var(--muted); font-size: .66rem; }
+
 .auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 10%, #21463a66, transparent 34%), var(--bg); }
 .auth-card { width: min(420px, 100%); padding: 34px; border: 1px solid #2e3b4c; border-radius: 18px; background: #10161ed9; box-shadow: 0 35px 100px #000a; }
 .auth-brand { margin-bottom: 23px; }
@@ -244,6 +258,7 @@ input:focus, select:focus { border-color: #4b8d72; box-shadow: 0 0 0 3px #4de3a1
   .page-header, .server-detail-header { align-items: flex-start; flex-direction: column; }
   .page-header .primary-button { width: 100%; }
   .metric-grid, .server-grid, .library-grid, .detail-grid { grid-template-columns: 1fr; }
+  .readiness-list { grid-template-columns: 1fr; }
   .panel.full { grid-column: auto; }
   .server-grid { gap: 12px; }
   .server-card { min-height: 230px; }

@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IHostMetricsProvider, HostMetricsProvider>();
+        services.AddSingleton<IHostReadinessProvider, HostReadinessProvider>();
         services.AddSingleton<IPathPolicy>(_ => new PathPolicy(options.ServersRoot));
         services.AddSingleton<IServerWorkQueue, ServerWorkQueue>();
         services.AddSingleton<IServerRuntimeStateStore, ServerRuntimeStateStore>();
