@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../DKay.GameServerDock.Application/DKay.GameServerDock.Application.csproj" />
+    <ProjectReference Include="../DKay.GameServerDock.Domain/DKay.GameServerDock.Domain.csproj" />
+    <ProjectReference Include="../DKay.GameServerDock.Infrastructure/DKay.GameServerDock.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+  </ItemGroup>
+</Project>
+

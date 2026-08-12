@@ -1,0 +1,23 @@
+<main class="auth-page">
+  <section class="auth-card">
+    <div class="auth-brand"><span class="brand-mark large">D</span></div>
+    <p class="eyebrow">PRIVATE INFRASTRUCTURE</p>
+    <h1>{{ setupRequired() ? 'Create your local admin' : 'Welcome back' }}</h1>
+    <p class="muted">
+      {{ setupRequired()
+        ? 'This account stays on your own server and controls every game instance.'
+        : 'Sign in to manage your game server host.' }}
+    </p>
+
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <label>User name<input formControlName="userName" autocomplete="username" /></label>
+      <label>Password<input type="password" formControlName="password" [attr.autocomplete]="setupRequired() ? 'new-password' : 'current-password'" /></label>
+      @if (setupRequired()) { <small class="field-hint">At least 10 characters.</small> }
+      @if (error()) { <p class="error-banner">{{ error() }}</p> }
+      <button class="primary-button wide" type="submit" [disabled]="loading()">
+        {{ loading() ? 'Please wait…' : setupRequired() ? 'Create admin' : 'Sign in' }}
+      </button>
+    </form>
+  </section>
+</main>
+

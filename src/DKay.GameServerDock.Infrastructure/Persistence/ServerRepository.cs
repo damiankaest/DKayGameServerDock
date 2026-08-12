@@ -1,0 +1,57 @@
+using DKay.GameServerDock.Application.Abstractions;
+using DKay.GameServerDock.Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace DKay.GameServerDock.Infrastructure.Persistence;
+
+public sealed class ServerRepository(AppDbContext database) : IServerRepository
+{
+    public async Task<IReadOnlyList<GameServerInstance>> ListAsync(CancellationToken cancellationToken) =>
+        await database.Servers.AsNoTracking().OrderBy(server => server.Name).ToListAsync(cancellationToken);
+
+    public async Task<GameServerInstance?> FindAsync(Guid id, CancellationToken cancellationToken) =>
+        await database.Servers.FindAsync([id], cancellationToken);
+
+    public async Task AddAsync(GameServerInstance server, CancellationToken cancellationToken)
+    {
+        database.Servers.Add(server);
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SaveAsync(GameServerInstance server, CancellationToken cancellationToken)
+    {
+        if (database.Entry(server).State == EntityState.Detached)
+        {
+            database.Servers.Update(server);
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<bool> IsPortAllocatedAsync(int port, CancellationToken cancellationToken) =>
+        database.Servers.AnyAsync(server => server.Port == port, cancellationToken);
+
+    public async Task<IReadOnlyList<ServerEvent>> GetEventsAsync(
+        Guid? serverId,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var query = database.ServerEvents.AsNoTracking();
+        if (serverId.HasValue)
+        {
+            query = query.Where(serverEvent => serverEvent.ServerId == serverId.Value);
+        }
+
+        return await query
+            .OrderByDescending(serverEvent => serverEvent.OccurredAt)
+            .Take(Math.Clamp(take, 1, 1000))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddEventAsync(ServerEvent serverEvent, CancellationToken cancellationToken)
+    {
+        database.ServerEvents.Add(serverEvent);
+        await database.SaveChangesAsync(cancellationToken);
+    }
+}
+

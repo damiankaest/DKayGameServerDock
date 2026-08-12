@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DKay.GameServerDock.Api/DKay.GameServerDock.Api.csproj" />
+    <Project Path="src/DKay.GameServerDock.Application/DKay.GameServerDock.Application.csproj" />
+    <Project Path="src/DKay.GameServerDock.Domain/DKay.GameServerDock.Domain.csproj" />
+    <Project Path="src/DKay.GameServerDock.Infrastructure/DKay.GameServerDock.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DKay.GameServerDock.Tests/DKay.GameServerDock.Tests.csproj" />
+  </Folder>
+</Solution>
+

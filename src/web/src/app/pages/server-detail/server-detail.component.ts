@@ -1,0 +1,86 @@
+import { DatePipe } from '@angular/common';
+import { Component, inject, OnDestroy, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
+import { ApiService } from '../../core/api.service';
+import { GameServer, ServerEvent } from '../../core/models';
+import { RealtimeService } from '../../core/realtime.service';
+
+@Component({
+  selector: 'app-server-detail',
+  imports: [RouterLink, DatePipe],
+  templateUrl: './server-detail.component.html'
+})
+export class ServerDetailComponent implements OnDestroy {
+  private readonly api = inject(ApiService);
+  private readonly realtime = inject(RealtimeService);
+  private readonly id = inject(ActivatedRoute).snapshot.paramMap.get('id')!;
+  private readonly refreshTimer: ReturnType<typeof setInterval>;
+  readonly server = signal<GameServer | null>(null);
+  readonly logs = signal<ServerEvent[]>([]);
+  readonly tab = signal<'overview' | 'console' | 'players'>('overview');
+  readonly command = signal('');
+  readonly progress = signal<{ percent: number; stage: string; message: string } | null>(null);
+  readonly error = signal('');
+
+  constructor() {
+    this.load();
+    void this.realtime.connect(this.id, {
+      consoleLine: line => this.logs.update(logs => [...logs, { id: 0, serverId: this.id, type: 'ConsoleOutput', ...line }].slice(-500)),
+      statusChanged: status => {
+        this.server.update(server => server ? { ...server, status } : server);
+        this.loadServer();
+      },
+      installationProgress: progress => this.progress.set(progress)
+    }).catch(() => this.error.set('Live updates are temporarily unavailable.'));
+    this.refreshTimer = setInterval(() => this.loadServer(), 5000);
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.refreshTimer);
+    void this.realtime.disconnect();
+  }
+
+  load(): void {
+    forkJoin({ server: this.api.server(this.id), logs: this.api.logs(this.id) }).subscribe({
+      next: result => {
+        this.server.set(result.server);
+        this.logs.set([...result.logs].reverse());
+      },
+      error: error => this.error.set(error.error?.detail ?? 'The server could not be loaded.')
+    });
+  }
+
+  loadServer(): void {
+    this.api.server(this.id).subscribe(server => this.server.set(server));
+  }
+
+  action(action: 'start' | 'stop' | 'restart' | 'kill' | 'update'): void {
+    this.error.set('');
+    this.api.serverAction(this.id, action).subscribe({
+      next: () => this.loadServer(),
+      error: error => this.error.set(error.error?.detail ?? 'The server action failed.')
+    });
+  }
+
+  updateCommand(event: Event): void {
+    this.command.set((event.target as HTMLInputElement).value);
+  }
+
+  sendCommand(): void {
+    const command = this.command().trim();
+    if (!command) return;
+    this.api.sendCommand(this.id, command).subscribe({
+      next: () => this.command.set(''),
+      error: error => this.error.set(error.error?.detail ?? 'The command could not be sent.')
+    });
+  }
+
+  consoleLogs(): ServerEvent[] {
+    return this.logs().filter(log => log.type === 'ConsoleOutput');
+  }
+
+  formatBytes(bytes: number): string {
+    return bytes ? `${(bytes / 1024 / 1024).toFixed(0)} MB` : '0 MB';
+  }
+}
