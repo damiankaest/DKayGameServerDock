@@ -61,6 +61,10 @@ public static class ServiceCollectionExtensions
         options.ServersRoot = ResolvePath("DGS_SERVERS_ROOT", options.ServersRoot, defaultServersRoot);
         options.SteamCmdPath = FirstConfigured("DGS_STEAMCMD_PATH", options.SteamCmdPath, string.Empty);
         options.JavaPath = FirstConfigured("DGS_JAVA_PATH", options.JavaPath, "java");
+        options.PublicHost = FirstConfigured("DGS_PUBLIC_HOST", options.PublicHost, string.Empty).Trim();
+        options.PublicPortalName = FirstConfigured("DGS_PUBLIC_PORTAL_NAME", options.PublicPortalName, "DKay Game Servers").Trim();
+        options.PublicPortalEnabled = ResolveBoolean("DGS_PUBLIC_PORTAL_ENABLED", options.PublicPortalEnabled);
+        options.PublicPortalPort = ResolvePort("DGS_PUBLIC_PORTAL_PORT", options.PublicPortalPort, 5081);
         return options;
     }
 
@@ -76,5 +80,22 @@ public static class ServiceCollectionExtensions
         }
 
         return string.IsNullOrWhiteSpace(configured) ? fallback : configured;
+    }
+
+    private static bool ResolveBoolean(string environmentName, bool configured)
+    {
+        var environmentValue = Environment.GetEnvironmentVariable(environmentName);
+        return string.IsNullOrWhiteSpace(environmentValue)
+            ? configured
+            : bool.TryParse(environmentValue, out var value) && value;
+    }
+
+    private static int ResolvePort(string environmentName, int configured, int fallback)
+    {
+        var environmentValue = Environment.GetEnvironmentVariable(environmentName);
+        var value = string.IsNullOrWhiteSpace(environmentValue) || !int.TryParse(environmentValue, out var parsed)
+            ? configured
+            : parsed;
+        return value is >= 1 and <= 65535 ? value : fallback;
     }
 }

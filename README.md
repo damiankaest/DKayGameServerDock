@@ -12,6 +12,7 @@ The project is independent from CouchClash. A later CouchClash integration can u
 - Local administrator bootstrap and cookie-based login
 - Live Windows/Linux host CPU, RAM, disk, network and uptime metrics
 - First-run readiness checks for writable storage, Java and SteamCMD
+- Read-only guest portal on a separate listener with explicit per-server publication
 - Typed game-template catalog with CS2 and Minecraft Paper
 - SQLite persistence for instances, users and server events
 - Server creation with background installation progress through SignalR
@@ -104,6 +105,9 @@ Configuration can be supplied through `appsettings.json` or environment variable
 | Game servers | `DGS_SERVERS_ROOT` | `C:\GameServers` |
 | SteamCMD executable | `DGS_STEAMCMD_PATH` | Must be configured |
 | Java executable | `DGS_JAVA_PATH` | `java` from `PATH` |
+| Guest portal | `DGS_PUBLIC_PORTAL_ENABLED` | `false` |
+| Guest portal port | `DGS_PUBLIC_PORTAL_PORT` | `5081` |
+| Public game host | `DGS_PUBLIC_HOST` | Must be configured before publishing |
 
 Example:
 
@@ -125,6 +129,8 @@ From an elevated PowerShell terminal:
 ```
 
 The publish script builds Angular, copies it into the API's static assets and creates a self-contained `win-x64` package in `artifacts\win-x64`. The installation script safely stops an existing service during updates, registers automatic recovery, optionally opens a LAN-only firewall rule and waits for `/health` before reporting success. See the [first-run checklist](docs/first-run-checklist.md) and [Windows hosting guide](docs/windows-hosting.md).
+
+To add the isolated read-only friend portal later, reinstall with `-EnablePublicPortal -PublicHost 'your-name.myfritz.net'`. Follow [docs/fritzbox-public-access.md](docs/fritzbox-public-access.md). Never forward admin port `5080` or configure the server PC as an exposed host.
 
 ## First Minecraft Paper server
 
@@ -157,6 +163,7 @@ CS2 uses Steam app ID `730`. The generated password lives in `game\csgo\cfg\dkay
 - File operations must go through `IPathPolicy` and stay below an instance root.
 - The service should run without administrator privileges after installation.
 - Do not expose port 5080 directly to the internet. Add TLS and a trusted reverse proxy before any remote-access feature.
+- Guest traffic is accepted only on the separate public listener. Its middleware rejects every path except `/join`, `/api/public/*`, static assets and health.
 
 ## Roadmap
 

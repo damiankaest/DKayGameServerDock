@@ -105,4 +105,11 @@ public sealed class GameServerInstance
         AutoRestart = autoRestart;
         UpdatedAt = now;
     }
+
+    public void UpdatePublication(string settingsJson, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(settingsJson);
+        SettingsJson = settingsJson;
+        UpdatedAt = now;
+    }
 }

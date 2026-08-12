@@ -7,14 +7,28 @@ param(
     [string]$Runtime = 'win-x64',
     [string]$InstallDirectory = 'C:\Program Files\DKayGameServerDock',
     [int]$Port = 5080,
-    [switch]$OpenLanFirewall
+    [switch]$OpenLanFirewall,
+    [switch]$EnablePublicPortal,
+    [int]$PublicPortalPort = 5081,
+    [string]$PublicHost = '',
+    [string]$PublicPortalName = 'DKay Game Servers'
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $repositoryRoot "artifacts\$Runtime"
 $executable = Join-Path $InstallDirectory 'DKay.GameServerDock.Api.exe'
-$binaryPath = "`"$executable`" --urls http://0.0.0.0:$Port"
+$listenUrls = "http://0.0.0.0:$Port"
+if ($EnablePublicPortal) {
+    if ([string]::IsNullOrWhiteSpace($PublicHost)) {
+        throw 'PublicHost is required when EnablePublicPortal is set. Use a MyFRITZ/DynDNS name or public IP address.'
+    }
+    if ($PublicPortalPort -eq $Port) {
+        throw 'The public guest portal and the administrator panel must use different ports.'
+    }
+    $listenUrls = "$listenUrls;http://0.0.0.0:$PublicPortalPort"
+}
+$binaryPath = "`"$executable`" --urls $listenUrls"
 
 if (-not (Test-Path $source)) {
     throw "Publish artifacts are missing at '$source'. Run publish-windows.ps1 first."
@@ -43,6 +57,15 @@ else {
 sc.exe description $ServiceName "Self-hosted game server control panel" | Out-Null
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
 
+$environmentKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
+$serviceEnvironment = @(
+    "DGS_PUBLIC_PORTAL_ENABLED=$($EnablePublicPortal.IsPresent.ToString().ToLowerInvariant())",
+    "DGS_PUBLIC_PORTAL_PORT=$PublicPortalPort",
+    "DGS_PUBLIC_HOST=$PublicHost",
+    "DGS_PUBLIC_PORTAL_NAME=$PublicPortalName"
+)
+New-ItemProperty -Path $environmentKey -Name Environment -PropertyType MultiString -Value $serviceEnvironment -Force | Out-Null
+
 if ($OpenLanFirewall) {
     $firewallName = "$DisplayName UI (LAN)"
     if (-not (Get-NetFirewallRule -DisplayName $firewallName -ErrorAction SilentlyContinue)) {
@@ -54,6 +77,20 @@ if ($OpenLanFirewall) {
             -LocalPort $Port `
             -RemoteAddress LocalSubnet | Out-Null
     }
+}
+
+$guestFirewallName = "$DisplayName Guest Portal"
+if ($EnablePublicPortal) {
+    Get-NetFirewallRule -DisplayName $guestFirewallName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    New-NetFirewallRule `
+        -DisplayName $guestFirewallName `
+        -Direction Inbound `
+        -Action Allow `
+        -Protocol TCP `
+        -LocalPort $PublicPortalPort | Out-Null
+}
+else {
+    Get-NetFirewallRule -DisplayName $guestFirewallName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 }
 
 Start-Service -Name $ServiceName
@@ -68,6 +105,11 @@ do {
             Write-Host "Service $ServiceName is installed and healthy at $healthUrl"
             if ($OpenLanFirewall) {
                 Write-Host "A Windows Firewall rule for local-subnet access on TCP $Port is active."
+            }
+            if ($EnablePublicPortal) {
+                Write-Host "Guest portal is listening on TCP $PublicPortalPort and its Windows Firewall rule is active."
+                Write-Host "Create a FRITZ!Box port forwarding rule only for this port."
+                Write-Host "Do not forward administrator port $Port."
             }
             return
         }

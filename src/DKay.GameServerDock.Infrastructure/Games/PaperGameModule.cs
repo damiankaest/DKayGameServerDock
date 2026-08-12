@@ -16,6 +16,7 @@ public sealed class PaperGameModule(PaperInstaller installer, DockOptions option
         "Java download",
         25565,
         4096,
+        ["TCP"],
         GameCapability.LiveConsole | GameCapability.ConsoleInput | GameCapability.Players |
         GameCapability.Backups | GameCapability.Files | GameCapability.Plugins | GameCapability.Whitelist,
         [
@@ -36,4 +37,3 @@ public sealed class PaperGameModule(PaperInstaller installer, DockOptions option
         ["-Xms512M", $"-Xmx{server.RamLimitMb}M", "-jar", "paper.jar", "--nogui"],
         new Dictionary<string, string>());
 }
-

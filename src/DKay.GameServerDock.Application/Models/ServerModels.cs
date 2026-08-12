@@ -19,6 +19,10 @@ public sealed record UpdateServerRequest(
     bool AutoRestart,
     IReadOnlyDictionary<string, string> Settings);
 
+public sealed record UpdateServerPublicationRequest(bool Published, int? PublicPort);
+
+public sealed record ServerPublicationState(bool Published, int PublicPort);
+
 public sealed record ServerLaunchSpec(
     string FileName,
     string WorkingDirectory,
@@ -45,4 +49,3 @@ public sealed record ServerRuntimeStatus(
     ProcessSnapshot Process,
     IReadOnlyList<PlayerInfo> Players,
     string? CurrentMap);
-

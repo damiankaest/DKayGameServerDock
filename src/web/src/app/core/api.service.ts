@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CreateServerRequest, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, ServerEvent } from './models';
+import { CreateServerRequest, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -50,6 +50,14 @@ export class ApiService {
 
   serverAction(id: string, action: 'start' | 'stop' | 'restart' | 'kill' | 'update'): Observable<unknown> {
     return this.http.post(`/api/servers/${id}/${action}`, {});
+  }
+
+  updatePublication(id: string, published: boolean, publicPort: number): Observable<ServerPublication> {
+    return this.http.put<ServerPublication>(`/api/servers/${id}/publication`, { published, publicPort });
+  }
+
+  publicServers(): Observable<PublicServerList> {
+    return this.http.get<PublicServerList>('/api/public/servers');
   }
 
   sendCommand(id: string, command: string): Observable<void> {

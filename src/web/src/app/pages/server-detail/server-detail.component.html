@@ -21,6 +21,34 @@
       <div class="detail-grid">
         <section class="panel"><header><h2>Runtime</h2><span class="live-pill">LIVE</span></header><div class="stats-list"><span><small>CPU</small><b>{{ current.process.cpuPercent.toFixed(1) }}%</b></span><span><small>Memory</small><b>{{ formatBytes(current.process.memoryBytes) }} / {{ current.ramLimitMb }} MB</b></span><span><small>Current map</small><b>{{ current.currentMap || 'Not reported' }}</b></span><span><small>Exit code</small><b>{{ current.exitCode ?? '—' }}</b></span></div></section>
         <section class="panel"><header><h2>Instance</h2></header><div class="stats-list"><span><small>Version</small><b>{{ current.version }}</b></span><span><small>Game port</small><b>{{ current.port }}</b></span><span><small>Autostart</small><b>{{ current.autostart ? 'Enabled' : 'Disabled' }}</b></span><span><small>Auto-restart</small><b>{{ current.autoRestart ? 'Enabled' : 'Disabled' }}</b></span></div></section>
+        <section class="panel full guest-access-panel">
+          <header>
+            <div><p class="eyebrow">FRIEND ACCESS</p><h2>Guest publication</h2></div>
+            <span class="status" [attr.data-status]="current.publication.published ? 'Running' : 'Stopped'">{{ current.publication.published ? 'Published' : 'Private' }}</span>
+          </header>
+          <div class="publication-layout">
+            <div>
+              <label>External game port<input type="number" min="1" max="65535" [value]="publicationPort() || current.port" (input)="updatePublicationPort($event)" /></label>
+              <small>FRITZ!Box: {{ current.networkProtocols.join(' + ') }} from this external port to internal port {{ current.port }}.</small>
+            </div>
+            <div class="publication-actions">
+              @if (current.publication.published) {
+                <button class="danger-button" type="button" [disabled]="publicationSaving()" (click)="savePublication(false)">Remove listing</button>
+              } @else {
+                <button class="primary-button" type="button" [disabled]="publicationSaving() || !current.publication.portalEnabled" (click)="savePublication(true)">Publish for friends</button>
+              }
+            </div>
+          </div>
+          @if (!current.publication.portalEnabled) {
+            <p class="publication-warning">The public guest listener is disabled. Configure it during Windows service installation before publishing servers.</p>
+          } @else if (current.publication.address) {
+            <div class="publication-addresses">
+              <button type="button" (click)="copy(current.publication.address!)"><small>GAME ADDRESS</small><code>{{ current.publication.address }}</code><b>{{ copied() === current.publication.address ? 'Copied' : 'Copy' }}</b></button>
+              @if (current.publication.portalUrl) { <button type="button" (click)="copy(current.publication.portalUrl!)"><small>GUEST PAGE</small><code>{{ current.publication.portalUrl }}</code><b>{{ copied() === current.publication.portalUrl ? 'Copied' : 'Copy' }}</b></button> }
+            </div>
+          }
+          <p class="readiness-note">Publishing changes only the guest listing. Windows Firewall and FRITZ!Box port forwarding remain explicit security steps.</p>
+        </section>
         <section class="panel full"><header><h2>Recent activity</h2><button class="secondary-button small" (click)="action('update')">Update server</button></header><div class="activity-list">@for (log of logs().slice(-8).reverse(); track log.id + log.occurredAt) { <div><i [attr.data-event]="log.type"></i><span><strong>{{ log.message }}</strong><small>{{ log.type }} · {{ log.occurredAt | date:'short' }}</small></span></div> }</div></section>
       </div>
     } @else if (tab() === 'console') {
@@ -32,4 +60,3 @@
     <div class="skeleton-block tall"></div>
   }
 </div>
-

@@ -11,6 +11,7 @@ public sealed record GameTemplateDescriptor(
     string Installer,
     int DefaultPort,
     int DefaultRamMb,
+    IReadOnlyList<string> NetworkProtocols,
     GameCapability Capabilities,
     IReadOnlyList<TemplateSettingDefinition> Settings);
 
@@ -22,4 +23,3 @@ public sealed record TemplateSettingDefinition(
     string? DefaultValue = null,
     IReadOnlyList<string>? Options = null,
     bool Secret = false);
-
