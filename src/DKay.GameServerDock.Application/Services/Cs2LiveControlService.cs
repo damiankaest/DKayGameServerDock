@@ -24,6 +24,9 @@ public sealed partial class Cs2LiveControlService(
         new("resume-match", "Resume match", "Continue a previously paused match.", "Round", "▷"),
         new("swap-teams", "Swap teams", "Move Terrorists and Counter-Terrorists to the opposite side.", "Teams", "⇄"),
         new("scramble-teams", "Scramble teams", "Redistribute the current players across both teams.", "Teams", "⤨"),
+        new("combat-peaceful", "Peaceful", "Disable player damage while keeping weapons and movement available.", "Teams", "☮"),
+        new("combat-team", "CT vs T", "Enable normal team combat: opponents take damage and teammates are protected.", "Teams", "VS", "primary"),
+        new("combat-ffa", "Free for all", "Treat every other player as an enemy, regardless of their assigned team.", "Teams", "FFA", "danger"),
         new("repair-team-damage", "Reapply combat profile", "Restore the selected peaceful, team or FFA policy after a plugin or map changed it.", "Teams", "HP", "primary"),
         new("add-bot-ct", "Add CT bot", "Disable team limits and add exactly one CT bot.", "Bots", "+CT"),
         new("add-bot-t", "Add T bot", "Disable team limits and add exactly one T bot.", "Bots", "+T"),
@@ -46,7 +49,10 @@ public sealed partial class Cs2LiveControlService(
             ["resume-match"] = "mp_unpause_match",
             ["swap-teams"] = "mp_swapteams",
             ["scramble-teams"] = "mp_scrambleteams",
-            ["repair-team-damage"] = "exec dkay-combat.cfg; mp_restartgame 1",
+            ["combat-peaceful"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
+            ["combat-team"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
+            ["combat-ffa"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
+            ["repair-team-damage"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
             ["add-bot-ct"] = "mp_autoteambalance 0; mp_limitteams 0; bot_quota_mode normal; bot_add_ct",
             ["add-bot-t"] = "mp_autoteambalance 0; mp_limitteams 0; bot_quota_mode normal; bot_add_t",
             ["kill-bots"] = "sv_cheats 1; bot_kill",
@@ -182,6 +188,22 @@ public sealed partial class Cs2LiveControlService(
             _ when ActionCommands.TryGetValue(request.ActionId, out var knownCommand) => knownCommand,
             _ => throw new InvalidOperationException($"Unknown CS2 quick action '{request.ActionId}'.")
         };
+        var combatMode = ResolveCombatModeAction(request.ActionId);
+        if (combatMode is not null)
+        {
+            await modes.SetActiveCombatModeAsync(server, combatMode, cancellationToken);
+            var persistentValues = store.ReadLiveSettings(server).ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value,
+                StringComparer.Ordinal);
+            foreach (var (key, value) in BuildCombatLiveValues(combatMode))
+            {
+                persistentValues[key] = value;
+            }
+
+            store.SaveLiveSettings(server, persistentValues);
+        }
+
         if (request.ActionId is "kill-bots" or "freeze-bots" or "release-bots" or "enable-bhop" or "disable-bhop")
         {
             var persistentValues = store.ReadLiveSettings(server).ToDictionary(
@@ -230,6 +252,34 @@ public sealed partial class Cs2LiveControlService(
         changedKeys.Overlaps(new[] { "bot_quota", "bot_difficulty", "bot_quota_mode", "bot_stop" })
             ? "bot_kick; exec dkay-live.cfg"
             : "exec dkay-live.cfg";
+
+    internal static string? ResolveCombatModeAction(string actionId) => actionId switch
+    {
+        "combat-peaceful" => "peaceful",
+        "combat-team" => "team",
+        "combat-ffa" => "ffa",
+        _ => null
+    };
+
+    internal static IReadOnlyDictionary<string, string> BuildCombatLiveValues(string combatMode)
+    {
+        if (combatMode is not ("peaceful" or "team" or "ffa"))
+        {
+            throw new ArgumentException("Combat mode must be peaceful, team or ffa.", nameof(combatMode));
+        }
+
+        var damageScale = combatMode == "peaceful" ? "0" : "1";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mp_friendlyfire"] = combatMode == "ffa" ? "1" : "0",
+            ["mp_teammates_are_enemies"] = combatMode == "ffa" ? "1" : "0",
+            ["mp_damage_scale_ct_head"] = damageScale,
+            ["mp_damage_scale_ct_body"] = damageScale,
+            ["mp_damage_scale_t_head"] = damageScale,
+            ["mp_damage_scale_t_body"] = damageScale,
+            ["mp_damage_headshot_only"] = "0"
+        };
+    }
 
     public async Task<Cs2MapChangeState> GetMapChangeStateAsync(
         Guid serverId,

@@ -52,4 +52,26 @@ public sealed class Cs2LiveControlServiceTests
 
         Assert.Equal("exec dkay-live.cfg", command);
     }
+
+    [Theory]
+    [InlineData("combat-peaceful", "peaceful", "0", "0", "0")]
+    [InlineData("combat-team", "team", "0", "0", "1")]
+    [InlineData("combat-ffa", "ffa", "1", "1", "1")]
+    public void Combat_actions_map_to_persisted_live_damage_rules(
+        string actionId,
+        string expectedMode,
+        string friendlyFire,
+        string teammatesAreEnemies,
+        string damageScale)
+    {
+        var mode = Cs2LiveControlService.ResolveCombatModeAction(actionId);
+        var values = Cs2LiveControlService.BuildCombatLiveValues(mode!);
+
+        Assert.Equal(expectedMode, mode);
+        Assert.Equal(friendlyFire, values["mp_friendlyfire"]);
+        Assert.Equal(teammatesAreEnemies, values["mp_teammates_are_enemies"]);
+        Assert.Equal(damageScale, values["mp_damage_scale_ct_body"]);
+        Assert.Equal(damageScale, values["mp_damage_scale_t_head"]);
+        Assert.Equal("0", values["mp_damage_headshot_only"]);
+    }
 }

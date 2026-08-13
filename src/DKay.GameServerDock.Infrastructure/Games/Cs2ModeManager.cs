@@ -176,6 +176,41 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
         return profile;
     }
 
+    public async Task<Cs2ModeProfile> SetActiveCombatModeAsync(
+        GameServerInstance server,
+        string combatMode,
+        CancellationToken cancellationToken)
+    {
+        var document = ReadModeDocument(server);
+        var profile = document.ActiveProfileId is null
+            ? null
+            : document.Profiles.FirstOrDefault(item => string.Equals(item.Id, document.ActiveProfileId, StringComparison.Ordinal));
+        if (profile is null)
+        {
+            throw new InvalidOperationException("Select and activate a CS2 map profile before changing its live combat mode.");
+        }
+
+        var preset = Presets.FirstOrDefault(item => string.Equals(item.Id, profile.PresetId, StringComparison.Ordinal))
+            ?? throw new InvalidDataException($"The saved CS2 preset '{profile.PresetId}' is no longer available.");
+        profile = NormalizeProfile(profile, preset) with
+        {
+            CombatMode = Cs2ModeCatalog.ResolveCombatMode(preset, combatMode),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        var convars = BuildProfileConVars(profile, preset);
+        await WriteProfileConfigurationAsync(server, profile, preset, convars, cancellationToken);
+        await WriteActiveCombatConfigurationAsync(server, profile, preset, cancellationToken);
+
+        var profiles = document.Profiles
+            .Select(item => string.Equals(item.Id, profile.Id, StringComparison.Ordinal) ? profile : item)
+            .ToArray();
+        await WriteJsonAtomicallyAsync(
+            GetModeDocumentPath(server),
+            document with { Profiles = profiles },
+            cancellationToken);
+        return profile;
+    }
+
     public Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server) =>
         runtime.GetWorkshopAccessState(server);
 
