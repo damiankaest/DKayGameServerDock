@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
+import { ConsoleCommandResult, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -41,6 +41,14 @@ export class ServerDetailComponent implements OnDestroy {
   readonly modeOverrides = signal<Record<string, string>>({});
   readonly modeSaving = signal(false);
   readonly packageQueueing = signal('');
+  readonly workshopQuery = signal('surf_');
+  readonly workshopResults = signal<Cs2WorkshopMap[]>([]);
+  readonly workshopTotal = signal(0);
+  readonly workshopSearching = signal(false);
+  readonly workshopAdding = signal('');
+  readonly workshopKey = signal('');
+  readonly workshopKeySaving = signal(false);
+  readonly workshopMessage = signal('');
   readonly actioning = signal('');
   readonly liveControl = signal<Cs2LiveControlState | null>(null);
   readonly liveValues = signal<Record<string, string>>({});
@@ -218,6 +226,11 @@ export class ServerDetailComponent implements OnDestroy {
     return this.modeCatalog()?.presets.find(preset => preset.id === this.selectedPresetId()) ?? null;
   }
 
+  activeModeProfile(): Cs2ModeProfile | null {
+    const state = this.modeState();
+    return state?.profiles.find(profile => profile.id === state.activeProfileId) ?? null;
+  }
+
   selectPreset(presetId: string): void {
     const preset = this.modeCatalog()?.presets.find(item => item.id === presetId);
     if (!preset) return;
@@ -252,11 +265,76 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeOverrides.update(values => ({ ...values, [key]: (event.target as HTMLInputElement | HTMLSelectElement).value }));
   }
 
-  applyModePreset(): void {
+  updateWorkshopQuery(event: Event): void {
+    this.workshopQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  updateWorkshopKey(event: Event): void {
+    this.workshopKey.set((event.target as HTMLInputElement).value.trim());
+  }
+
+  saveWorkshopKey(): void {
+    const key = this.workshopKey();
+    if (!key) return;
+    this.error.set('');
+    this.workshopMessage.set('');
+    this.workshopKeySaving.set(true);
+    this.api.configureCs2WorkshopKey(this.id, key).pipe(finalize(() => this.workshopKeySaving.set(false))).subscribe({
+      next: result => {
+        this.workshopKey.set('');
+        this.modeState.update(state => state ? { ...state, workshop: result.state } : state);
+        this.workshopMessage.set(result.message);
+      },
+      error: error => this.error.set(error.error?.detail ?? 'The Steam Workshop key could not be saved.')
+    });
+  }
+
+  searchWorkshop(): void {
+    const query = this.workshopQuery().trim();
+    if (query.length < 2) return;
+    this.error.set('');
+    this.workshopMessage.set('');
+    this.workshopSearching.set(true);
+    this.api.searchCs2Workshop(this.id, query).pipe(finalize(() => this.workshopSearching.set(false))).subscribe({
+      next: result => {
+        this.workshopResults.set(result.items);
+        this.workshopTotal.set(result.total);
+        this.workshopMessage.set(result.items.length
+          ? `Found ${result.total.toLocaleString()} matching Workshop item(s). Showing compatible CS2 map files first.`
+          : 'Steam returned no selectable CS2 maps. Removed, private and collection items are filtered out.');
+      },
+      error: error => this.error.set(error.error?.detail ?? 'Steam Workshop search failed.')
+    });
+  }
+
+  addWorkshopMap(map: Cs2WorkshopMap): void {
+    const inferredPreset = this.modeCatalog()?.presets.find(preset =>
+      preset.mapPrefixes.some(prefix => map.mapName.toLowerCase().startsWith(prefix.toLowerCase())));
+    if (inferredPreset && inferredPreset.id !== this.selectedPresetId()) {
+      this.selectPreset(inferredPreset.id);
+    }
+    this.modeMapName.set(map.mapName);
+    this.modeWorkshopId.set(map.publishedFileId);
+    this.applyModePreset(map);
+  }
+
+  formatWorkshopSize(bytes: number): string {
+    if (!bytes) return 'Size unknown';
+    return bytes >= 1024 * 1024 * 1024
+      ? `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+      : `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
+  }
+
+  formatWorkshopCount(value: number): string {
+    return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  }
+
+  applyModePreset(workshopMap: Cs2WorkshopMap | null = null): void {
     const preset = this.selectedPreset();
     if (!preset) return;
     this.error.set('');
     this.modeSaving.set(true);
+    if (workshopMap) this.workshopAdding.set(workshopMap.publishedFileId);
     this.api.applyCs2Mode(this.id, {
       presetId: preset.id,
       mapName: this.modeMapName().trim(),
@@ -265,17 +343,20 @@ export class ServerDetailComponent implements OnDestroy {
       botDifficulty: this.modeBotDifficulty(),
       installRecommendedPackages: this.modeInstallPackages(),
       overrides: this.modeOverrides()
-    }).subscribe({
+    }).pipe(finalize(() => {
+      this.modeSaving.set(false);
+      this.workshopAdding.set('');
+    })).subscribe({
       next: result => {
         this.modeState.set(result.state);
-        this.modeSaving.set(false);
         if (result.queuedPackageIds.length) {
           this.progress.set({ percent: 0, stage: 'queued', message: `Queued ${result.queuedPackageIds.length} managed package(s).` });
+        } else if (workshopMap) {
+          this.workshopMessage.set(`Added ${workshopMap.title}. Start CS2 to download and host the latest Workshop version.`);
         }
       },
       error: error => {
         this.error.set(error.error?.detail ?? 'The map preset could not be applied.');
-        this.modeSaving.set(false);
       }
     });
   }

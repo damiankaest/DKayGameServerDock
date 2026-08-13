@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ApplyCs2ModePresetRequest, ConfigureCs2GsltResult, ConsoleCommandResult, CreateServerRequest, Cs2LiveConfigurationApplyResult, Cs2LiveControlState, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication, ServerSelfTestResult } from './models';
+import { ApplyCs2ModePresetRequest, ConfigureCs2GsltResult, ConfigureCs2WorkshopKeyResult, ConsoleCommandResult, CreateServerRequest, Cs2LiveConfigurationApplyResult, Cs2LiveControlState, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, Cs2WorkshopSearchResult, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication, ServerSelfTestResult } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -78,6 +78,14 @@ export class ApiService {
 
   installCs2Package(id: string, packageId: string): Observable<void> {
     return this.http.post<void>(`/api/servers/${id}/cs2-packages/${packageId}/install`, {});
+  }
+
+  searchCs2Workshop(id: string, query: string, take = 18): Observable<Cs2WorkshopSearchResult> {
+    return this.http.get<Cs2WorkshopSearchResult>(`/api/servers/${id}/cs2-workshop/search`, { params: { query, take } });
+  }
+
+  configureCs2WorkshopKey(id: string, key: string): Observable<ConfigureCs2WorkshopKeyResult> {
+    return this.http.put<ConfigureCs2WorkshopKeyResult>(`/api/servers/${id}/cs2-workshop/key`, { key });
   }
 
   cs2LiveControl(id: string): Observable<Cs2LiveControlState> {

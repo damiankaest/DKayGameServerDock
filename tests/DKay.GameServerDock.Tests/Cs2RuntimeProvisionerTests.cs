@@ -197,6 +197,59 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
+    public void Steam_workshop_key_is_masked_and_survives_generated_file_replacement()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        const string key = "0123456789abcdef0123456789abcdef";
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            var state = provisioner.SaveWorkshopApiKey(server, key);
+            Assert.True(state.Configured);
+            Assert.NotNull(state.MaskedKey);
+            Assert.DoesNotContain(key, state.MaskedKey!, StringComparison.Ordinal);
+            Assert.True(state.ProtectedFromGameUpdates);
+
+            var generatedPath = Path.Combine(root, "game", "csgo", "webapi_authkey.txt");
+            Assert.Equal(key, File.ReadAllText(generatedPath).Trim());
+            File.Delete(generatedPath);
+
+            provisioner.Prepare(server);
+
+            Assert.Equal(key, File.ReadAllText(generatedPath).Trim());
+            Assert.Equal(key, File.ReadAllText(Path.Combine(root, ".dkay", "steam-web-api-key")).Trim());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Steam_workshop_key_rejects_non_api_key_values()
+    {
+        var root = CreateTemporaryDirectory();
+        var server = CreateServer(root, 27015);
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            Assert.Throws<InvalidOperationException>(() => provisioner.SaveWorkshopApiKey(server, "+quit"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Authenticates_and_executes_a_local_rcon_command()
     {
         var root = CreateTemporaryDirectory();

@@ -21,6 +21,30 @@ public sealed class Cs2ModeService(
         return await modes.GetStateAsync(server, cancellationToken);
     }
 
+    public async Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(
+        Guid serverId,
+        string query,
+        int? take,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        return await modes.SearchWorkshopMapsAsync(server, query, Math.Clamp(take ?? 18, 1, 30), cancellationToken);
+    }
+
+    public async Task<ConfigureCs2WorkshopKeyResult> ConfigureWorkshopKeyAsync(
+        Guid serverId,
+        ConfigureCs2WorkshopKeyRequest request,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        var state = modes.SaveWorkshopApiKey(server, request.Key);
+        const string message = "Steam Workshop access updated securely. Restart CS2 before loading a Workshop map.";
+        await events.RecordAsync(
+            ServerEvent.Create(server.Id, ServerEventType.ConfigurationChanged, message, clock.UtcNow),
+            cancellationToken);
+        return new ConfigureCs2WorkshopKeyResult(state, message);
+    }
+
     public async Task<Cs2ModeApplyResult> ApplyPresetAsync(
         Guid serverId,
         ApplyCs2ModePresetRequest request,

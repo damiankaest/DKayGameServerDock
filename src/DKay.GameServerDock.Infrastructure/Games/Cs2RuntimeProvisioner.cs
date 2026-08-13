@@ -64,6 +64,7 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         // Capture the manually created legacy cfg before SteamCMD has any opportunity to replace
         // files under game/csgo. Subsequent repairs always use the private .dkay copy.
         MigrateLegacyGslt(server);
+        MigrateLegacyWorkshopApiKey(server);
     }
 
     public void Prepare(GameServerInstance server)
@@ -79,7 +80,9 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         File.WriteAllText(Path.Combine(server.InstallDirectory, "steam_appid.txt"), "730\n");
         WriteRconConfiguration(server, GetOrCreateRconPassword(server));
         MigrateLegacyGslt(server);
+        MigrateLegacyWorkshopApiKey(server);
         WriteGsltConfiguration(server);
+        WriteWorkshopApiKey(server);
         WriteLiveConfiguration(server, ReadPersistedLiveSettings(server));
         WriteBootstrapConfiguration(server);
         EnsureRconAutoexec(server);
@@ -163,6 +166,48 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         WriteBootstrapConfiguration(server);
         return GetGsltState(server);
     }
+
+    public Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        MigrateLegacyWorkshopApiKey(server);
+        var key = ReadWorkshopApiKey(server);
+        if (key is null)
+        {
+            return new Cs2WorkshopAccessState(
+                false,
+                null,
+                false,
+                "A Steam Web API key is required to browse and download Workshop maps.");
+        }
+
+        return new Cs2WorkshopAccessState(
+            true,
+            $"••••••••{key[^4..]}",
+            true,
+            "Workshop access is protected in .dkay and restored after Steam or Hub updates.");
+    }
+
+    public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        key = key?.Trim() ?? string.Empty;
+        if (!Regex.IsMatch(key, "^[A-Fa-f0-9]{32}$", RegexOptions.CultureInvariant))
+        {
+            throw new InvalidOperationException("The Steam Web API key must contain exactly 32 hexadecimal characters.");
+        }
+
+        var path = GetWorkshopApiKeySecretPath(server);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        WriteAtomic(path, key + Environment.NewLine);
+        WriteWorkshopApiKey(server);
+        return GetWorkshopAccessState(server);
+    }
+
+    public string GetWorkshopApiKey(GameServerInstance server) =>
+        ReadWorkshopApiKey(server)
+        ?? throw new InvalidOperationException(
+            "Configure a Steam Web API key in the Workshop map browser before searching for or loading Workshop maps.");
 
     public string GetRconPassword(GameServerInstance server)
     {
@@ -296,6 +341,19 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
             $"sv_setsteamaccount \"{token}\"{Environment.NewLine}");
     }
 
+    private static void WriteWorkshopApiKey(GameServerInstance server)
+    {
+        var key = ReadWorkshopApiKey(server);
+        if (key is null)
+        {
+            return;
+        }
+
+        var csgoDirectory = Path.Combine(server.InstallDirectory, "game", "csgo");
+        Directory.CreateDirectory(csgoDirectory);
+        WriteAtomic(Path.Combine(csgoDirectory, "webapi_authkey.txt"), key + Environment.NewLine);
+    }
+
     private static void WriteLiveConfiguration(
         GameServerInstance server,
         IReadOnlyDictionary<string, string> values)
@@ -407,6 +465,30 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         WriteAtomic(path, match.Groups["token"].Value + Environment.NewLine);
     }
 
+    private static void MigrateLegacyWorkshopApiKey(GameServerInstance server)
+    {
+        if (ReadWorkshopApiKey(server) is not null)
+        {
+            return;
+        }
+
+        var legacyPath = Path.Combine(server.InstallDirectory, "game", "csgo", "webapi_authkey.txt");
+        if (!File.Exists(legacyPath))
+        {
+            return;
+        }
+
+        var key = File.ReadAllText(legacyPath).Trim();
+        if (!Regex.IsMatch(key, "^[A-Fa-f0-9]{32}$", RegexOptions.CultureInvariant))
+        {
+            return;
+        }
+
+        var path = GetWorkshopApiKeySecretPath(server);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        WriteAtomic(path, key + Environment.NewLine);
+    }
+
     private static string? ReadGsltToken(GameServerInstance server)
     {
         var path = GetGsltSecretPath(server);
@@ -418,6 +500,20 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         var token = File.ReadAllText(path).Trim();
         return Regex.IsMatch(token, "^[A-Za-z0-9]{20,128}$", RegexOptions.CultureInvariant)
             ? token
+            : null;
+    }
+
+    private static string? ReadWorkshopApiKey(GameServerInstance server)
+    {
+        var path = GetWorkshopApiKeySecretPath(server);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var key = File.ReadAllText(path).Trim();
+        return Regex.IsMatch(key, "^[A-Fa-f0-9]{32}$", RegexOptions.CultureInvariant)
+            ? key
             : null;
     }
 
@@ -446,6 +542,9 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
 
     private static string GetLiveSettingsPath(GameServerInstance server) =>
         Path.Combine(server.InstallDirectory, ".dkay", "live-settings.json");
+
+    private static string GetWorkshopApiKeySecretPath(GameServerInstance server) =>
+        Path.Combine(server.InstallDirectory, ".dkay", "steam-web-api-key");
 
     private static string GetRconSecretPath(GameServerInstance server) =>
         Path.Combine(server.InstallDirectory, ".dkay", "rcon-password");

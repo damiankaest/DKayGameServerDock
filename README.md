@@ -19,6 +19,7 @@ The project is independent from CouchClash. A later CouchClash integration can u
 - Paper stable-build download through PaperMC's current v3 download service
 - CS2 installation/update through a configured SteamCMD executable
 - Per-map CS2 presets for Classic, Surf, KZ, Bhop, ScoutzKnivez and RPG-ready arenas
+- Admin Workshop map browser with Steam search, preview, compatibility validation and install state
 - Trusted managed installation for Metamod, CounterStrikeSharp and selected movement plugins
 - Native process start, graceful stop, force kill and restart
 - Per-process PID, CPU, memory, uptime and exit code
@@ -171,7 +172,7 @@ CS2 uses Steam app ID `730`. The generated server password lives in `game\csgo\c
 
 The server detail **Live control** tab provides guided match, warmup, bot, team, map and practice controls plus typed live ConVars for round timing, gravity, acceleration, velocity and private-server cheats. Applying values writes `.dkay/live-settings.json`, executes the generated cfg immediately when CS2 is running and reloads it after the active map preset on every later start. The **Console** tab remains available for advanced raw commands. **Run self-test** sends a unique local RCON echo and only reports success when the running server answers, allowing headless verification without a CS2 game client.
 
-After installation, open the server's **Modes & maps** tab. Pick Classic, Surf, KZ, Bhop, ScoutzKnivez or RPG Arena; enter a stock/custom map name or Steam Workshop ID; adjust bots and the allowlisted movement/round settings; then apply the profile while the server is stopped. Each map gets a separate generated cfg and the selected profile controls the next launch.
+After installation, open the server's **Modes & maps** tab. Pick Classic, Surf, KZ, Bhop, ScoutzKnivez or RPG Arena. For Workshop maps, store a Steam Web API key once, search the live CS2 catalog, inspect the preview and click **Add & activate**; the Dock validates the item and CS2 downloads/updates it on the next start. Adjust bots and allowlisted movement/round settings as needed. Each map gets a separate generated cfg and the selected profile controls the next launch. The Workshop key and GSLT are different secrets and both remain in the instance's protected `.dkay` directory.
 
 The automatic mod installer resolves dependencies and downloads only registered HTTPS upstreams. Surf/Bhop can queue Metamod, CounterStrikeSharp, CS2-Tags, Movement Unlocker, RampBugFix and SharpTimer; KZ uses the KZGlobalTeam CS2KZ package. RPG rules are ready, but the known Warcraft package remains manual/experimental until it has a maintained trusted release channel. See [CS2 mode presets and managed mods](docs/cs2-mode-presets.md).
 

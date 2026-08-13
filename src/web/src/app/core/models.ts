@@ -223,6 +223,9 @@ export interface Cs2ModeProfile {
   presetName: string;
   mapName: string;
   workshopId: string | null;
+  workshopTitle: string | null;
+  workshopPreviewUrl: string | null;
+  workshopInstallState: 'local' | 'pending' | 'installed';
   botQuota: number;
   botDifficulty: number;
   overrides: Record<string, string>;
@@ -240,6 +243,37 @@ export interface Cs2ModeState {
   activeProfileId: string | null;
   profiles: Cs2ModeProfile[];
   packages: Cs2ManagedPackageState[];
+  workshop: Cs2WorkshopAccessState;
+}
+
+export interface Cs2WorkshopAccessState {
+  configured: boolean;
+  maskedKey: string | null;
+  protectedFromGameUpdates: boolean;
+  message: string;
+}
+
+export interface Cs2WorkshopMap {
+  publishedFileId: string;
+  title: string;
+  mapName: string;
+  previewUrl: string | null;
+  workshopUrl: string;
+  fileSize: number;
+  subscriptions: number;
+  updatedAt: string | null;
+  tags: string[];
+}
+
+export interface Cs2WorkshopSearchResult {
+  query: string;
+  total: number;
+  items: Cs2WorkshopMap[];
+}
+
+export interface ConfigureCs2WorkshopKeyResult {
+  state: Cs2WorkshopAccessState;
+  message: string;
 }
 
 export interface ApplyCs2ModePresetRequest {

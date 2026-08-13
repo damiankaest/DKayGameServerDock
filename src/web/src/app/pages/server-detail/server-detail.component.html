@@ -61,6 +61,12 @@
           <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
         </section>
 
+        @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed') {
+          <p class="publication-warning full"><b>CS2 is running without a detected Workshop payload.</b> The selected map has not appeared under the server's Workshop map cache. Stop CS2, verify the Steam Web API key, choose a validated map below and start it again while watching the live console.</p>
+        } @else if (current.status === 'Running' && !current.currentMap) {
+          <p class="publication-warning full"><b>The process is running, but no active map is being reported.</b> A public join can still time out or land on an empty level. Run the command-channel self-test and inspect the first Workshop/download messages in Console.</p>
+        }
+
         @if (modeCatalog(); as catalog) {
           <section class="preset-grid">
             @for (preset of catalog.presets; track preset.id) {
@@ -71,12 +77,71 @@
             }
           </section>
 
+          @if (modeState()?.workshop; as workshop) {
+            <section class="panel full workshop-browser-panel">
+              <header>
+                <div><p class="eyebrow">STEAM WORKSHOP</p><h2>Find and add a map</h2><p>Search live Workshop listings instead of copying IDs. Removed, private, collection and non-CS2 items cannot be added.</p></div>
+                <span class="status" [attr.data-status]="workshop.configured ? 'Running' : 'Error'">{{ workshop.configured ? 'READY' : 'KEY REQUIRED' }}</span>
+              </header>
+
+              <div class="workshop-key-row" [class.configured]="workshop.configured">
+                <div>
+                  <strong>{{ workshop.configured ? 'Steam Web API connected' : 'Connect Steam Workshop' }}</strong>
+                  <small>{{ workshop.message }}</small>
+                  @if (workshop.maskedKey) { <code>{{ workshop.maskedKey }}</code> }
+                </div>
+                <div class="workshop-key-form">
+                  <input type="password" autocomplete="new-password" maxlength="32" placeholder="32-character Steam Web API key" [value]="workshopKey()" (input)="updateWorkshopKey($event)" />
+                  <button class="secondary-button" type="button" [disabled]="workshopKeySaving() || !workshopKey()" (click)="saveWorkshopKey()">{{ workshopKeySaving() ? 'Saving…' : workshop.configured ? 'Replace key' : 'Save key' }}</button>
+                </div>
+                <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">Create a Steam Web API key ↗</a>
+              </div>
+
+              @if (workshop.configured) {
+                <form class="workshop-search" (submit)="$event.preventDefault(); searchWorkshop()">
+                  <span>⌕</span>
+                  <input maxlength="80" placeholder="Search maps, e.g. surf beginner" [value]="workshopQuery()" (input)="updateWorkshopQuery($event)" />
+                  <button class="primary-button" type="submit" [disabled]="workshopSearching() || workshopQuery().trim().length < 2">{{ workshopSearching() ? 'Searching Steam…' : 'Search maps' }}</button>
+                </form>
+              }
+
+              @if (workshopMessage()) { <p class="workshop-message">{{ workshopMessage() }}</p> }
+
+              @if (workshopSearching()) {
+                <div class="workshop-loading"><i></i><span>Searching the Counter-Strike 2 Workshop…</span></div>
+              } @else if (workshopResults().length) {
+                <div class="workshop-result-grid">
+                  @for (map of workshopResults(); track map.publishedFileId) {
+                    <article class="workshop-map-card">
+                      <a class="workshop-preview" [href]="map.workshopUrl" target="_blank" rel="noreferrer">
+                        @if (map.previewUrl) { <img [src]="map.previewUrl" [alt]="map.title" loading="lazy" /> } @else { <span>CS2</span> }
+                        <i>Workshop {{ map.publishedFileId }}</i>
+                      </a>
+                      <div class="workshop-map-body">
+                        <h3>{{ map.title }}</h3>
+                        <code>{{ map.mapName }}</code>
+                        <div class="workshop-map-meta"><span>{{ formatWorkshopSize(map.fileSize) }}</span><span>{{ formatWorkshopCount(map.subscriptions) }} subscribers</span>@if (map.updatedAt) { <span>Updated {{ map.updatedAt | date:'mediumDate' }}</span> }</div>
+                        <div class="workshop-tags">@for (tag of map.tags.slice(0, 4); track tag) { <span>{{ tag }}</span> }</div>
+                      </div>
+                      <footer>
+                        <a [href]="map.workshopUrl" target="_blank" rel="noreferrer">Details ↗</a>
+                        <button class="primary-button small" type="button" [disabled]="modeSaving() || (current.status !== 'Stopped' && current.status !== 'Crashed' && current.status !== 'Error')" (click)="addWorkshopMap(map)">{{ workshopAdding() === map.publishedFileId ? 'Adding…' : 'Add & activate' }}</button>
+                      </footer>
+                    </article>
+                  }
+                </div>
+                @if (workshopTotal() > workshopResults().length) { <p class="readiness-note">Refine the search to narrow {{ workshopTotal().toLocaleString() }} results. The first compatible entries are shown.</p> }
+              }
+              <p class="workshop-download-note"><b>How download works:</b> Add a map while the server is stopped, then start it. CS2 validates the Workshop item, downloads the latest version into its managed map cache and hosts it with the selected {{ selectedPreset()?.name || 'mode' }} settings. Progress appears in the live console.</p>
+            </section>
+          }
+
           @if (selectedPreset(); as preset) {
             <section class="panel mode-config-panel">
               <header><div><p class="eyebrow">ACTIVE EDITOR</p><h2>{{ preset.name }} profile</h2></div><span class="mode-package-count">{{ preset.recommendedPackageIds.length }} managed mods</span></header>
               <div class="mode-form-grid">
                 <label>Map name<input maxlength="64" placeholder="surf_utopia_njv" [value]="modeMapName()" (input)="updateModeText('map', $event)" /><small>Letters, digits, underscores and hyphens only.</small></label>
-                <label>Steam Workshop ID <em>optional</em><input inputmode="numeric" placeholder="3072851041" [value]="modeWorkshopId()" (input)="updateModeText('workshop', $event)" /><small>The server starts this Workshop item instead of a stock map.</small></label>
+                <label>Steam Workshop ID <em>advanced fallback</em><input inputmode="numeric" placeholder="Choose a validated map above" [value]="modeWorkshopId()" (input)="updateModeText('workshop', $event)" /><small>Direct IDs are validated with Steam before the profile is saved.</small></label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {
@@ -104,7 +169,7 @@
               <header><div><p class="eyebrow">PER-MAP PROFILES</p><h2>Configured maps</h2></div><small>{{ state.profiles.length }} saved</small></header>
               <div class="profile-list">
                 @for (profile of state.profiles; track profile.id) {
-                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? 'Workshop ' + profile.workshopId : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
+                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.workshopTitle || profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? (profile.workshopInstallState === 'installed' ? 'Workshop installed' : 'Workshop downloads on start') : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
                 } @empty { <div class="empty-state compact"><h3>No map profiles yet</h3><p>Pick a preset above and apply it to your first map.</p></div> }
               </div>
             </section>

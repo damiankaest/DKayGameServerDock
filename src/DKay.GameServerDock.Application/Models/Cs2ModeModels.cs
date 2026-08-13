@@ -47,11 +47,42 @@ public sealed record Cs2ModeProfile(
     string PresetName,
     string MapName,
     string? WorkshopId,
+    string? WorkshopTitle,
+    string? WorkshopPreviewUrl,
+    string WorkshopInstallState,
     int BotQuota,
     int BotDifficulty,
     IReadOnlyDictionary<string, string> Overrides,
     IReadOnlyList<string> RecommendedPackageIds,
     DateTimeOffset UpdatedAt);
+
+public sealed record Cs2WorkshopAccessState(
+    bool Configured,
+    string? MaskedKey,
+    bool ProtectedFromGameUpdates,
+    string Message);
+
+public sealed record Cs2WorkshopMap(
+    string PublishedFileId,
+    string Title,
+    string MapName,
+    string? PreviewUrl,
+    string WorkshopUrl,
+    long FileSize,
+    long Subscriptions,
+    DateTimeOffset? UpdatedAt,
+    IReadOnlyList<string> Tags);
+
+public sealed record Cs2WorkshopSearchResult(
+    string Query,
+    int Total,
+    IReadOnlyList<Cs2WorkshopMap> Items);
+
+public sealed record ConfigureCs2WorkshopKeyRequest(string Key);
+
+public sealed record ConfigureCs2WorkshopKeyResult(
+    Cs2WorkshopAccessState State,
+    string Message);
 
 public sealed record Cs2ManagedPackageState(
     string Id,
@@ -70,7 +101,8 @@ public sealed record Cs2ManagedPackageState(
 public sealed record Cs2ModeState(
     string? ActiveProfileId,
     IReadOnlyList<Cs2ModeProfile> Profiles,
-    IReadOnlyList<Cs2ManagedPackageState> Packages);
+    IReadOnlyList<Cs2ManagedPackageState> Packages,
+    Cs2WorkshopAccessState Workshop);
 
 public sealed record Cs2ModeApplyResult(
     Cs2ModeState State,

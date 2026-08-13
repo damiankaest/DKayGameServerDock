@@ -49,6 +49,8 @@ public sealed class Cs2Installer(
             $"sv_password \"{password}\"",
             $"sv_visiblemaxplayers {maxPlayers}",
             "sv_lan 0",
+            "sv_broadcast_ugc_downloads 1",
+            "sv_broadcast_ugc_download_progress_interval 5",
             "log on",
             "exec dkay-mode.cfg"
         };
