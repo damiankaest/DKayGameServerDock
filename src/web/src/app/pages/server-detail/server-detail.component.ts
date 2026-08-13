@@ -216,6 +216,7 @@ export class ServerDetailComponent implements OnDestroy {
     return ({
       'Round & match': 'Warmup, round duration, buy time and the overall match flow.',
       'Teams & bots': 'Team balance, player interaction and how bots join the match.',
+      'Combat & damage': 'Enemy damage multipliers and special hit rules. Normal team modes use 1.0 for every multiplier.',
       'Movement & physics': 'Gravity, acceleration, bunnyhop behavior and maximum movement speed.',
       'Admin playground': 'Private practice tools such as cheats, ammunition, respawns and endless rounds.'
     } as Record<string, string>)[group] ?? 'Runtime values for the running CS2 server.';
@@ -225,6 +226,7 @@ export class ServerDetailComponent implements OnDestroy {
     return ({
       'Round & match': '◷',
       'Teams & bots': 'VS',
+      'Combat & damage': 'HP',
       'Movement & physics': '↗',
       'Admin playground': '⚙'
     } as Record<string, string>)[group] ?? '•';
@@ -264,8 +266,8 @@ export class ServerDetailComponent implements OnDestroy {
 
     const presetId = this.activeModeProfile()?.presetId ?? 'classic';
     const relevantGroups = presetId === 'surf' || presetId === 'kz' || presetId === 'bhop' || presetId === 'scoutzknivez'
-      ? new Set(['Round & match', 'Teams & bots', 'Movement & physics'])
-      : new Set(['Round & match', 'Teams & bots', 'Admin playground']);
+      ? new Set(['Round & match', 'Teams & bots', 'Combat & damage', 'Movement & physics'])
+      : new Set(['Round & match', 'Teams & bots', 'Combat & damage', 'Admin playground']);
     return settings.filter(setting => relevantGroups.has(setting.group));
   }
 

@@ -178,11 +178,13 @@ public sealed class Cs2RuntimeProvisionerTests
             {
                 ["sv_cheats"] = "1",
                 ["sv_maxvelocity"] = "10000",
-                ["mp_warmuptime"] = "180"
+                ["mp_warmuptime"] = "180",
+                ["bot_quota_mode"] = "Fill"
             };
             var saved = provisioner.SaveLiveSettings(server, values);
             Assert.Equal("1", saved["sv_cheats"]);
             Assert.Equal("10000", saved["sv_maxvelocity"]);
+            Assert.Equal("fill", saved["bot_quota_mode"]);
 
             var liveConfigPath = Path.Combine(root, "game", "csgo", "cfg", "dkay-live.cfg");
             File.WriteAllText(liveConfigPath, "overwritten\n");
@@ -192,6 +194,7 @@ public sealed class Cs2RuntimeProvisionerTests
             Assert.Contains("sv_cheats 1", liveConfig, StringComparison.Ordinal);
             Assert.Contains("sv_maxvelocity 10000", liveConfig, StringComparison.Ordinal);
             Assert.Contains("mp_warmuptime 180", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("bot_quota_mode fill", liveConfig, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(root, ".dkay", "live-settings.json")));
         }
         finally
