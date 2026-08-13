@@ -19,7 +19,9 @@ public sealed record Cs2ModePresetDescriptor(
     string Description,
     IReadOnlyList<string> MapPrefixes,
     IReadOnlyList<string> RecommendedPackageIds,
-    IReadOnlyList<Cs2ConVarDescriptor> Settings);
+    IReadOnlyList<Cs2ConVarDescriptor> Settings,
+    string DefaultCombatMode,
+    string DefaultAmmoMode);
 
 public sealed record Cs2ManagedPackageDescriptor(
     string Id,
@@ -39,7 +41,9 @@ public sealed record ApplyCs2ModePresetRequest(
     int BotQuota,
     int BotDifficulty,
     bool InstallRecommendedPackages,
-    IReadOnlyDictionary<string, string> Overrides);
+    IReadOnlyDictionary<string, string> Overrides,
+    string? CombatMode = null,
+    string? AmmoMode = null);
 
 public sealed record Cs2ModeProfile(
     string Id,
@@ -54,7 +58,9 @@ public sealed record Cs2ModeProfile(
     int BotDifficulty,
     IReadOnlyDictionary<string, string> Overrides,
     IReadOnlyList<string> RecommendedPackageIds,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? CombatMode = null,
+    string? AmmoMode = null);
 
 public sealed record Cs2WorkshopAccessState(
     bool Configured,

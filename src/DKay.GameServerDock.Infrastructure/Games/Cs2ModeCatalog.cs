@@ -6,6 +6,9 @@ namespace DKay.GameServerDock.Infrastructure.Games;
 
 public static partial class Cs2ModeCatalog
 {
+    public static IReadOnlyList<string> CombatModes { get; } = ["peaceful", "team", "ffa"];
+    public static IReadOnlyList<string> AmmoModes { get; } = ["standard", "infinite-magazine", "infinite-reserve"];
+
     public static IReadOnlyList<Cs2ModePresetDescriptor> Presets { get; } =
     [
         new(
@@ -30,7 +33,9 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_ignore_round_win_conditions", "0", "Use normal bomb, hostage and elimination win conditions."),
                 Fixed("sv_airaccelerate", "12", "Valve-style air acceleration."),
                 Fixed("sv_enablebunnyhopping", "0", "Automatic bunny hopping disabled.")
-            ]),
+            ],
+            "team",
+            "standard"),
         new(
             "surf",
             "Surf",
@@ -57,7 +62,9 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_ignore_round_win_conditions", "1", "Do not end active surf runs on normal win conditions."),
                 Fixed("sv_enablebunnyhopping", "1", "Bunny hopping enabled."),
                 Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
-            ]),
+            ],
+            "peaceful",
+            "standard"),
         new(
             "kz",
             "KZ / Climb",
@@ -84,7 +91,9 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_ignore_round_win_conditions", "1", "Do not end active climbs on normal win conditions."),
                 Fixed("sv_enablebunnyhopping", "1", "Bunny hopping enabled."),
                 Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
-            ]),
+            ],
+            "peaceful",
+            "standard"),
         new(
             "bhop",
             "Bunny Hop",
@@ -111,7 +120,9 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_respawn_on_death_ct", "1", "Respawn Counter-Terrorists after a failed run."),
                 Fixed("mp_respawn_immunitytime", "0", "Do not retain combat immunity on movement maps."),
                 Fixed("mp_ignore_round_win_conditions", "1", "Do not end active runs on normal win conditions.")
-            ]),
+            ],
+            "peaceful",
+            "standard"),
         new(
             "scoutzknivez",
             "ScoutzKnivez",
@@ -140,7 +151,9 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_ignore_round_win_conditions", "1", "Keep the respawn arena running."),
                 Fixed("mp_autoteambalance", "1", "Keep combat teams balanced."),
                 Fixed("mp_limitteams", "1", "Prevent heavily stacked combat teams.")
-            ]),
+            ],
+            "team",
+            "standard"),
         new(
             "rpg-arena",
             "RPG Arena",
@@ -171,7 +184,9 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_ignore_round_win_conditions", "1", "Keep the arena running while players respawn."),
                 Fixed("mp_autoteambalance", "1", "Keep both RPG teams balanced."),
                 Fixed("mp_limitteams", "1", "Prevent one RPG team from becoming heavily stacked.")
-            ])
+            ],
+            "team",
+            "standard")
     ];
 
     public static IReadOnlyList<Cs2ManagedPackageDescriptor> Packages { get; } =
@@ -228,8 +243,72 @@ public static partial class Cs2ModeCatalog
             result[definition.Key] = Normalize(definition, value);
         }
 
+        foreach (var (key, value) in BuildCombatConVars(
+                     ResolveCombatMode(preset, request.CombatMode),
+                     ResolveAmmoMode(preset, request.AmmoMode)))
+        {
+            // Explicit combat policy wins over historic fixed preset values. This keeps movement
+            // physics independent from whether players may fight on the map.
+            result[key] = value;
+        }
+
         return result;
     }
+
+    public static string ResolveCombatMode(Cs2ModePresetDescriptor preset, string? value)
+    {
+        var candidate = string.IsNullOrWhiteSpace(value) ? preset.DefaultCombatMode : value.Trim().ToLowerInvariant();
+        return CombatModes.Contains(candidate, StringComparer.Ordinal)
+            ? candidate
+            : throw new ArgumentException("Combat mode must be peaceful, team or ffa.");
+    }
+
+    public static string ResolveAmmoMode(Cs2ModePresetDescriptor preset, string? value)
+    {
+        var candidate = string.IsNullOrWhiteSpace(value) ? preset.DefaultAmmoMode : value.Trim().ToLowerInvariant();
+        return AmmoModes.Contains(candidate, StringComparer.Ordinal)
+            ? candidate
+            : throw new ArgumentException("Ammo mode must be standard, infinite-magazine or infinite-reserve.");
+    }
+
+    public static IReadOnlyDictionary<string, string> BuildCombatConVars(string combatMode, string ammoMode)
+    {
+        if (!CombatModes.Contains(combatMode, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("Combat mode must be peaceful, team or ffa.");
+        }
+
+        if (!AmmoModes.Contains(ammoMode, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("Ammo mode must be standard, infinite-magazine or infinite-reserve.");
+        }
+
+        var damageScale = combatMode == "peaceful" ? "0" : "1";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mp_friendlyfire"] = combatMode == "ffa" ? "1" : "0",
+            ["mp_teammates_are_enemies"] = combatMode == "ffa" ? "1" : "0",
+            ["mp_damage_scale_ct_head"] = damageScale,
+            ["mp_damage_scale_ct_body"] = damageScale,
+            ["mp_damage_scale_t_head"] = damageScale,
+            ["mp_damage_scale_t_body"] = damageScale,
+            ["mp_damage_headshot_only"] = "0",
+            ["sv_infinite_ammo"] = ammoMode switch
+            {
+                "infinite-magazine" => "1",
+                "infinite-reserve" => "2",
+                _ => "0"
+            }
+        };
+    }
+
+    public static IReadOnlyDictionary<string, string> BuildSharpTimerCombatCommands(string combatMode, string ammoMode) =>
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // SharpTimer implements damage and ammunition independently from CS2's own ConVars.
+            ["sharptimer_remove_damage"] = combatMode == "peaceful" ? "1" : "0",
+            ["sharptimer_apply_infinite_ammo"] = ammoMode == "infinite-magazine" ? "1" : "0"
+        };
 
     public static void ValidateMap(string mapName, string? workshopId)
     {

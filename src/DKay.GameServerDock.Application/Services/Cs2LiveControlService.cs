@@ -24,7 +24,7 @@ public sealed partial class Cs2LiveControlService(
         new("resume-match", "Resume match", "Continue a previously paused match.", "Round", "▷"),
         new("swap-teams", "Swap teams", "Move Terrorists and Counter-Terrorists to the opposite side.", "Teams", "⇄"),
         new("scramble-teams", "Scramble teams", "Redistribute the current players across both teams.", "Teams", "⤨"),
-        new("repair-team-damage", "Repair team damage", "Restore normal enemy damage, remove respawn immunity and redistribute both teams.", "Teams", "HP", "primary"),
+        new("repair-team-damage", "Reapply combat profile", "Restore the selected peaceful, team or FFA policy after a plugin or map changed it.", "Teams", "HP", "primary"),
         new("add-bot-ct", "Add CT bot", "Disable team limits and add exactly one CT bot.", "Bots", "+CT"),
         new("add-bot-t", "Add T bot", "Disable team limits and add exactly one T bot.", "Bots", "+T"),
         new("kill-bots", "Kill bots", "Enable private-server cheats and end every bot life.", "Bots", "⌁", "danger"),
@@ -44,7 +44,7 @@ public sealed partial class Cs2LiveControlService(
             ["resume-match"] = "mp_unpause_match",
             ["swap-teams"] = "mp_swapteams",
             ["scramble-teams"] = "mp_scrambleteams",
-            ["repair-team-damage"] = "mp_friendlyfire 0; mp_teammates_are_enemies 0; mp_respawn_immunitytime 0; mp_damage_scale_ct_head 1; mp_damage_scale_ct_body 1; mp_damage_scale_t_head 1; mp_damage_scale_t_body 1; mp_damage_headshot_only 0; mp_autoteambalance 1; mp_limitteams 1; bot_join_team any; mp_scrambleteams; mp_restartgame 1",
+            ["repair-team-damage"] = "exec dkay-combat.cfg; mp_restartgame 1",
             ["add-bot-ct"] = "mp_autoteambalance 0; mp_limitteams 0; bot_quota_mode normal; bot_add_ct",
             ["add-bot-t"] = "mp_autoteambalance 0; mp_limitteams 0; bot_quota_mode normal; bot_add_t",
             ["kill-bots"] = "sv_cheats 1; bot_kill",
@@ -168,24 +168,6 @@ public sealed partial class Cs2LiveControlService(
                 pair => pair.Value,
                 StringComparer.Ordinal);
             persistentValues["sv_cheats"] = "1";
-            store.SaveLiveSettings(server, persistentValues);
-        }
-        else if (request.ActionId == "repair-team-damage")
-        {
-            var persistentValues = store.ReadLiveSettings(server).ToDictionary(
-                pair => pair.Key,
-                pair => pair.Value,
-                StringComparer.Ordinal);
-            persistentValues["mp_friendlyfire"] = "0";
-            persistentValues["mp_teammates_are_enemies"] = "0";
-            persistentValues["mp_respawn_immunitytime"] = "0";
-            persistentValues["mp_damage_scale_ct_head"] = "1";
-            persistentValues["mp_damage_scale_ct_body"] = "1";
-            persistentValues["mp_damage_scale_t_head"] = "1";
-            persistentValues["mp_damage_scale_t_body"] = "1";
-            persistentValues["mp_damage_headshot_only"] = "0";
-            persistentValues["mp_autoteambalance"] = "1";
-            persistentValues["mp_limitteams"] = "1";
             store.SaveLiveSettings(server, persistentValues);
         }
 

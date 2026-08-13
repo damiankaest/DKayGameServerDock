@@ -146,6 +146,26 @@
               <div class="mode-form-grid">
                 <label>Map name<input maxlength="64" placeholder="surf_utopia_njv" [value]="modeMapName()" (input)="updateModeText('map', $event)" /><small>Letters, digits, underscores and hyphens only.</small></label>
                 <label>Steam Workshop ID <em>advanced fallback</em><input inputmode="numeric" placeholder="Choose a validated map above" [value]="modeWorkshopId()" (input)="updateModeText('workshop', $event)" /><small>Direct IDs are validated with Steam before the profile is saved.</small></label>
+                <label class="mode-policy-field">Player combat
+                  <select [value]="modeCombat()" (change)="updateModeCombat($event)">
+                    <option value="peaceful">Peaceful · no player damage</option>
+                    <option value="team">Teams · T versus CT</option>
+                    <option value="ffa">Free for all · everyone is an enemy</option>
+                  </select>
+                  <small>
+                    @if (modeCombat() === 'peaceful') { Weapons work, but hits cannot damage players. Ideal for pure timer runs. }
+                    @else if (modeCombat() === 'team') { Opposing teams can fight; teammates remain protected. }
+                    @else { Every other player can be damaged, regardless of the team CS2 assigned. }
+                  </small>
+                </label>
+                <label class="mode-policy-field">Ammunition
+                  <select [value]="modeAmmo()" (change)="updateModeAmmo($event)">
+                    <option value="standard">Standard magazines and reserve</option>
+                    <option value="infinite-reserve">Infinite reserve · reload required</option>
+                    <option value="infinite-magazine">Infinite magazine · no reload</option>
+                  </select>
+                  <small>This also controls SharpTimer's own infinite-ammo feature, so RPG and Bhop profiles behave exactly as selected.</small>
+                </label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {

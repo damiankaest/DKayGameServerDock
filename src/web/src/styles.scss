@@ -322,6 +322,9 @@ input:focus, select:focus { border-color: #4b8d72; box-shadow: 0 0 0 3px #4de3a1
 .mode-form-grid label { display: grid; gap: 6px; align-content: start; color: #c3cddb; font-size: .68rem; font-weight: 700; }
 .mode-form-grid label em { color: var(--muted); font-size: .6rem; font-style: normal; font-weight: 500; }
 .mode-form-grid label small { color: var(--muted); font-size: .6rem; font-weight: 400; line-height: 1.4; }
+.mode-form-grid .mode-policy-field { padding: 12px; border: 1px solid #31513f; border-radius: 9px; background: linear-gradient(145deg, #12251c, #0e1716); }
+.mode-policy-field select { border-color: #38634d; background-color: #0b1411; }
+.mode-policy-field small { min-height: 34px; color: #9eb9aa !important; }
 .mode-apply-row { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
 .check-row { display: flex; gap: 11px; align-items: flex-start; cursor: pointer; }
 .check-row input { width: auto; margin-top: 2px; accent-color: var(--green); }
