@@ -5,7 +5,10 @@ using DKay.GameServerDock.Infrastructure.Games;
 
 namespace DKay.GameServerDock.Infrastructure.Installation;
 
-public sealed class Cs2Installer(DockOptions options, ICs2ModeManager modes) : IGameInstaller
+public sealed class Cs2Installer(
+    DockOptions options,
+    ICs2ModeManager modes,
+    Cs2RuntimeProvisioner runtime) : IGameInstaller
 {
     private readonly SteamCmdInstaller _steam = new(options, 730);
 
@@ -15,6 +18,7 @@ public sealed class Cs2Installer(DockOptions options, ICs2ModeManager modes) : I
         CancellationToken cancellationToken)
     {
         await _steam.InstallAsync(server, reportProgress, cancellationToken);
+        runtime.Prepare(server);
         await WriteServerConfigAsync(server, cancellationToken);
         await modes.RepairAfterGameUpdateAsync(server, cancellationToken);
     }
@@ -25,6 +29,7 @@ public sealed class Cs2Installer(DockOptions options, ICs2ModeManager modes) : I
         CancellationToken cancellationToken)
     {
         await _steam.UpdateAsync(server, reportProgress, cancellationToken);
+        runtime.Prepare(server);
         await WriteServerConfigAsync(server, cancellationToken);
         await modes.RepairAfterGameUpdateAsync(server, cancellationToken);
     }

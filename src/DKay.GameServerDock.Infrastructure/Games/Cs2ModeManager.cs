@@ -198,9 +198,9 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
             await reportProgress(new InstallationProgress(55, "verify", $"Validating {package.Name} archive paths…"), cancellationToken);
             var stagingRoot = Path.Combine(temporaryRoot, "staging");
             await SafeZipExtractor.ExtractAsync(archivePath, stagingRoot, cancellationToken);
-            var payloadRoot = ResolvePayloadRoot(stagingRoot);
+            var deployment = ResolveDeployment(packageId, stagingRoot, csgoRoot);
             await reportProgress(new InstallationProgress(75, "deploy", $"Deploying {package.Name} into game/csgo…"), cancellationToken);
-            await CopyPayloadAsync(payloadRoot, csgoRoot, cancellationToken);
+            await CopyPayloadAsync(deployment.SourceRoot, deployment.DestinationRoot, cancellationToken);
 
             if (packageId == "metamod-source")
             {
@@ -381,6 +381,26 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
                ?? throw new InvalidDataException("The mod archive does not contain a CS2 addons or cfg payload.");
     }
 
+    private static PackageDeployment ResolveDeployment(string packageId, string stagingRoot, string csgoRoot)
+    {
+        if (packageId == "cs2-tags")
+        {
+            var pluginAssembly = Directory
+                .EnumerateFiles(stagingRoot, "CS2-Tags.dll", SearchOption.AllDirectories)
+                .SingleOrDefault();
+            if (pluginAssembly is null)
+            {
+                throw new InvalidDataException("The CS2-Tags archive does not contain CS2-Tags.dll.");
+            }
+
+            return new PackageDeployment(
+                Path.GetDirectoryName(pluginAssembly)!,
+                Path.Combine(csgoRoot, "addons", "counterstrikesharp", "plugins", "CS2-Tags"));
+        }
+
+        return new PackageDeployment(ResolvePayloadRoot(stagingRoot), csgoRoot);
+    }
+
     private static async Task CopyPayloadAsync(string sourceRoot, string destinationRoot, CancellationToken cancellationToken)
     {
         var destination = Path.GetFullPath(destinationRoot) + Path.DirectorySeparatorChar;
@@ -521,6 +541,7 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
     private sealed record PackageMarker(bool Installed, string? Version, DateTimeOffset? InstalledAt);
     private sealed record PackageSource(PackageSourceKind Kind, string? Repository);
     private sealed record PackageDownload(Uri Url, string Version);
+    private sealed record PackageDeployment(string SourceRoot, string DestinationRoot);
 
     private enum PackageSourceKind
     {

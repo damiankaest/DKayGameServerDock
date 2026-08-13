@@ -167,7 +167,9 @@ The installer uses PaperMC's stable channel and writes `eula.txt` plus a minimal
 4. Watch SteamCMD installation output in the server detail.
 5. Start the instance after installation.
 
-CS2 uses Steam app ID `730`. The generated password lives in `game\csgo\cfg\dkay-server.cfg` inside the instance; it is not passed on the process command line.
+CS2 uses Steam app ID `730`. The generated server password lives in `game\csgo\cfg\dkay-server.cfg` inside the instance; it is not passed on the process command line. On Windows, the Dock copies SteamCMD's `steamclient64.dll`, `tier0_s64.dll` and `vstdlib_s64.dll` beside `cs2.exe` before every start, so the restricted service account does not require a signed-in desktop Steam client. The administrator command channel uses a generated local RCON password stored below the instance's `.dkay` directory and never returns it through the API.
+
+The server detail **Console** tab provides safe shortcuts for starting a round, adding/removing/killing bots and gracefully quitting CS2. **Run self-test** sends a unique local RCON echo and only reports success when the running server answers, allowing headless verification without a CS2 game client.
 
 After installation, open the server's **Modes & maps** tab. Pick Classic, Surf, KZ, Bhop, ScoutzKnivez or RPG Arena; enter a stock/custom map name or Steam Workshop ID; adjust bots and the allowlisted movement/round settings; then apply the profile while the server is stopped. Each map gets a separate generated cfg and the selected profile controls the next launch.
 

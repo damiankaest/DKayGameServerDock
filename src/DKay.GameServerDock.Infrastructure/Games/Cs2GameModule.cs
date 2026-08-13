@@ -5,7 +5,11 @@ using DKay.GameServerDock.Infrastructure.Installation;
 
 namespace DKay.GameServerDock.Infrastructure.Games;
 
-public sealed class Cs2GameModule(Cs2Installer installer, ICs2ModeManager modes) : IGameModule
+public sealed class Cs2GameModule(
+    Cs2Installer installer,
+    ICs2ModeManager modes,
+    Cs2RuntimeProvisioner runtime,
+    Cs2RconClient rcon) : IGameModule
 {
     public GameTemplateDescriptor Descriptor { get; } = new(
         "counter-strike-2",
@@ -28,10 +32,11 @@ public sealed class Cs2GameModule(Cs2Installer installer, ICs2ModeManager modes)
         ]);
 
     public IGameInstaller Installer { get; } = installer;
-    public IGameServerAdapter Adapter { get; } = new BasicGameServerAdapter("quit");
+    public IGameServerAdapter Adapter { get; } = new Cs2GameServerAdapter(rcon);
 
     public ServerLaunchSpec BuildLaunchSpec(GameServerInstance server)
     {
+        runtime.Prepare(server);
         var settings = GameSettings.Read(server);
         var activeProfile = modes.GetActiveProfile(server);
         var executable = OperatingSystem.IsWindows()
@@ -58,11 +63,17 @@ public sealed class Cs2GameModule(Cs2Installer installer, ICs2ModeManager modes)
         }
         arguments.Add("+exec");
         arguments.Add("dkay-server.cfg");
+        arguments.Add("+exec");
+        arguments.Add("dkay-rcon.cfg");
 
         return new ServerLaunchSpec(
             executable,
             server.InstallDirectory,
             arguments,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>
+            {
+                ["SteamAppId"] = "730",
+                ["SteamGameId"] = "730"
+            });
     }
 }

@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, GameServer, ServerEvent } from '../../core/models';
+import { ConsoleCommandResult, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -23,6 +23,8 @@ export class ServerDetailComponent implements OnDestroy {
   readonly logsError = signal('');
   readonly tab = signal<'overview' | 'modes' | 'console' | 'players'>('overview');
   readonly command = signal('');
+  readonly commandAction = signal('');
+  readonly selfTestResult = signal<ServerSelfTestResult | null>(null);
   readonly progress = signal<{ percent: number; stage: string; message: string } | null>(null);
   readonly error = signal('');
   readonly publicationPort = signal<number | null>(null);
@@ -237,9 +239,24 @@ export class ServerDetailComponent implements OnDestroy {
   sendCommand(): void {
     const command = this.command().trim();
     if (!command) return;
-    this.api.sendCommand(this.id, command).subscribe({
-      next: () => this.command.set(''),
-      error: error => this.error.set(error.error?.detail ?? 'The command could not be sent.')
+    this.executeCommand('custom', command, () => this.command.set(''));
+  }
+
+  quickCommand(label: string, command: string): void {
+    this.executeCommand(label, command);
+  }
+
+  runSelfTest(): void {
+    this.error.set('');
+    this.selfTestResult.set(null);
+    this.commandAction.set('self-test');
+    this.api.selfTest(this.id).pipe(finalize(() => this.commandAction.set(''))).subscribe({
+      next: result => {
+        this.selfTestResult.set(result);
+        this.appendConsoleMessage(result.message, result.passed ? 'CommandSelfTestPassed' : 'CommandSelfTestFailed');
+        if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
+      },
+      error: error => this.error.set(error.error?.detail ?? 'The server self-test failed.')
     });
   }
 
@@ -302,7 +319,37 @@ export class ServerDetailComponent implements OnDestroy {
       log.type === 'ServerUpdateStarted' ||
       log.type === 'ServerUpdateFailed' ||
       log.type === 'ServerStartRequested' ||
-      log.type === 'ServerStartProgress');
+      log.type === 'ServerStartProgress' ||
+      log.type === 'ConsoleCommand' ||
+      log.type.startsWith('CommandSelfTest'));
+  }
+
+  private executeCommand(label: string, command: string, completed?: () => void): void {
+    this.error.set('');
+    this.commandAction.set(label);
+    this.api.sendCommand(this.id, command).pipe(finalize(() => this.commandAction.set(''))).subscribe({
+      next: result => {
+        completed?.();
+        this.appendCommandResult(command, result);
+      },
+      error: error => this.error.set(error.error?.detail ?? `The '${label}' command could not be executed.`)
+    });
+  }
+
+  private appendCommandResult(command: string, result: ConsoleCommandResult): void {
+    this.appendConsoleMessage(`> ${command} (${result.transport})`, 'ConsoleCommand');
+    if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
+  }
+
+  private appendConsoleMessage(message: string, type: string): void {
+    this.logs.update(logs => [...logs, {
+      id: 0,
+      serverId: this.id,
+      type,
+      message,
+      dataJson: null,
+      occurredAt: new Date().toISOString()
+    }].slice(-500));
   }
 
   formatBytes(bytes: number): string {

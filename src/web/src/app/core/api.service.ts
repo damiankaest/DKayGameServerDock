@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ApplyCs2ModePresetRequest, CreateServerRequest, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication } from './models';
+import { ApplyCs2ModePresetRequest, ConsoleCommandResult, CreateServerRequest, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication, ServerSelfTestResult } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -80,8 +80,12 @@ export class ApiService {
     return this.http.post<void>(`/api/servers/${id}/cs2-packages/${packageId}/install`, {});
   }
 
-  sendCommand(id: string, command: string): Observable<void> {
-    return this.http.post<void>(`/api/servers/${id}/command`, { command });
+  sendCommand(id: string, command: string): Observable<ConsoleCommandResult> {
+    return this.http.post<ConsoleCommandResult>(`/api/servers/${id}/command`, { command });
+  }
+
+  selfTest(id: string): Observable<ServerSelfTestResult> {
+    return this.http.post<ServerSelfTestResult>(`/api/servers/${id}/self-test`, {});
   }
 
   logs(id: string, take = 300): Observable<ServerEvent[]> {

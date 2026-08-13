@@ -92,8 +92,11 @@ public sealed class ManagedProcessSupervisor(
         }
         else
         {
-            await managed.Process.StandardInput.WriteLineAsync(gracefulCommand.AsMemory(), cancellationToken);
-            await managed.Process.StandardInput.FlushAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(gracefulCommand))
+            {
+                await managed.Process.StandardInput.WriteLineAsync(gracefulCommand.AsMemory(), cancellationToken);
+                await managed.Process.StandardInput.FlushAsync(cancellationToken);
+            }
             try
             {
                 await managed.Process.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
@@ -161,7 +164,7 @@ public sealed class ManagedProcessSupervisor(
 
     private void QueueOutput(Guid serverId, string stream, string? line)
     {
-        if (string.IsNullOrWhiteSpace(line))
+        if (string.IsNullOrWhiteSpace(line) || !ConsoleOutputPolicy.ShouldRecord(line))
         {
             return;
         }

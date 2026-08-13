@@ -1,4 +1,8 @@
+using System.IO.Compression;
+using System.Net;
+using System.Text;
 using DKay.GameServerDock.Application.Models;
+using DKay.GameServerDock.Domain;
 using DKay.GameServerDock.Infrastructure.Games;
 
 namespace DKay.GameServerDock.Tests;
@@ -66,5 +70,98 @@ public sealed class Cs2ModeCatalogTests
         Assert.True(order.IndexOf("cs2-tags") < order.IndexOf("sharp-timer"));
         Assert.Contains("movement-unlocker", order);
         Assert.Equal(order.Count, order.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task InstallPackage_DeploysFlatCs2TagsArchiveIntoCounterStrikeSharpPluginDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-cs2-tags-tests-{Guid.NewGuid():N}");
+        var csgoRoot = Path.Combine(root, "game", "csgo");
+        var markerRoot = Path.Combine(csgoRoot, "addons", ".dkay");
+        Directory.CreateDirectory(markerRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(markerRoot, "counterstrikesharp.json"),
+            "{\"installed\":true,\"version\":\"test\",\"installedAt\":\"2026-01-01T00:00:00Z\"}");
+        var server = GameServerInstance.Create(
+            Guid.NewGuid(),
+            "CS2 test",
+            "counter-strike-2",
+            root,
+            "latest",
+            27015,
+            null,
+            null,
+            4096,
+            "{}",
+            DateTimeOffset.UtcNow);
+
+        try
+        {
+            using var httpClient = new HttpClient(new Cs2TagsReleaseHandler(CreateCs2TagsArchive()));
+            var manager = new Cs2ModeManager(httpClient);
+
+            await manager.InstallPackageAsync(
+                server,
+                "cs2-tags",
+                (_, _) => Task.CompletedTask,
+                CancellationToken.None);
+
+            Assert.True(File.Exists(Path.Combine(
+                csgoRoot,
+                "addons",
+                "counterstrikesharp",
+                "plugins",
+                "CS2-Tags",
+                "CS2-Tags.dll")));
+            var state = await manager.GetStateAsync(server, CancellationToken.None);
+            Assert.True(state.Packages.Single(package => package.Id == "cs2-tags").Installed);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static byte[] CreateCs2TagsArchive()
+    {
+        using var output = new MemoryStream();
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("CS2-Tags/CS2-Tags.dll");
+            using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
+            writer.Write("test-plugin");
+        }
+
+        return output.ToArray();
+    }
+
+    private sealed class Cs2TagsReleaseHandler(byte[] archive) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            HttpResponseMessage response;
+            if (request.RequestUri?.Host == "api.github.com")
+            {
+                response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"tag_name\":\"build-test\",\"assets\":[{\"name\":\"CS2-Tags.zip\",\"browser_download_url\":\"https://github.com/daffyyyy/CS2-Tags/releases/download/build-test/CS2-Tags.zip\"}]}",
+                        Encoding.UTF8,
+                        "application/json")
+                };
+            }
+            else
+            {
+                response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(archive)
+                };
+            }
+
+            response.RequestMessage = request;
+            return Task.FromResult(response);
+        }
     }
 }

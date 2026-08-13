@@ -97,6 +97,7 @@ The lower-level service installer remains available for automation:
 - **Health check fails:** run `Get-Service DKayGameServerDock`, inspect Windows Event Viewer and open `C:\ProgramData\DKayGameServerDock\installation-summary.txt`.
 - **UI works only locally:** verify the wizard created `DKay Game Server Dock UI (LAN)` and that Windows categorizes the active network as Private.
 - **CS2 readiness is yellow:** confirm `C:\Tools\SteamCMD\steamcmd.exe` exists and rerun setup with CS2 support enabled.
+- **CS2 says no Steam client was found:** run the configured `steamcmd.exe +quit` once, update the Dock and start the instance again. Required 64-bit Steam runtime files are copied into the managed CS2 runtime automatically.
 - **Minecraft readiness is yellow:** run `java -version`, rerun setup and either install Microsoft OpenJDK or enter the full `java.exe` path.
 - **Guest page works but friends cannot join a game:** the guest page and game server use separate ports. Add the game's indicated TCP/UDP Windows Firewall and FRITZ!Box rules.
 

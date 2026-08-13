@@ -228,7 +228,28 @@ public sealed class ServerOrchestrator(
         }
 
         var module = modules.GetRequired(server.TemplateId);
-        var snapshot = await processes.StopAsync(server, module.Adapter.GracefulStopCommand, force, cancellationToken);
+        var gracefulCommand = module.Adapter.GracefulStopCommand;
+        if (!force && module.Adapter.HandlesCommandsExternally)
+        {
+            try
+            {
+                await module.Adapter.ExecuteConsoleCommandAsync(server, processes, gracefulCommand, cancellationToken);
+                gracefulCommand = string.Empty;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                await events.RecordAsync(
+                    ServerEvent.Create(
+                        server.Id,
+                        ServerEventType.ServerStartProgress,
+                        $"Graceful command channel failed; the process will be stopped after the safety timeout: {exception.Message}",
+                        clock.UtcNow),
+                    cancellationToken);
+                gracefulCommand = string.Empty;
+            }
+        }
+
+        var snapshot = await processes.StopAsync(server, gracefulCommand, force, cancellationToken);
         server.TrackProcess(null, snapshot.ExitCode, clock.UtcNow);
         await TransitionAsync(server, ServerStatus.Stopped, cancellationToken);
         await events.RecordAsync(
@@ -248,7 +269,10 @@ public sealed class ServerOrchestrator(
         return await StartAsync(serverId, cancellationToken);
     }
 
-    public async Task SendCommandAsync(Guid serverId, string command, CancellationToken cancellationToken)
+    public async Task<ConsoleCommandResult> SendCommandAsync(
+        Guid serverId,
+        string command,
+        CancellationToken cancellationToken)
     {
         var server = await GetRequiredAsync(serverId, cancellationToken);
         if (server.Status != ServerStatus.Running)
@@ -256,8 +280,42 @@ public sealed class ServerOrchestrator(
             throw new InvalidOperationException("Console commands can only be sent to a running server.");
         }
 
-        var normalized = modules.GetRequired(server.TemplateId).Adapter.NormalizeConsoleCommand(command);
-        await processes.SendCommandAsync(serverId, normalized, cancellationToken);
+        var adapter = modules.GetRequired(server.TemplateId).Adapter;
+        var normalized = adapter.NormalizeConsoleCommand(command);
+        return await adapter.ExecuteConsoleCommandAsync(server, processes, normalized, cancellationToken);
+    }
+
+    public async Task<ServerSelfTestResult> TestCommandChannelAsync(
+        Guid serverId,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetRequiredAsync(serverId, cancellationToken);
+        var snapshot = processes.GetSnapshot(serverId);
+        if (server.Status != ServerStatus.Running || !snapshot.IsRunning)
+        {
+            throw new InvalidOperationException("Start the server before running its self-test.");
+        }
+
+        var adapter = modules.GetRequired(server.TemplateId).Adapter;
+        var marker = $"DKAY_COMMAND_PROBE_{Guid.NewGuid():N}";
+        var result = await adapter.ExecuteConsoleCommandAsync(
+            server,
+            processes,
+            adapter.NormalizeConsoleCommand($"echo {marker}"),
+            cancellationToken);
+        var passed = result.Output?.Contains(marker, StringComparison.Ordinal) == true;
+        var message = passed
+            ? "Process, local game port and administrator command channel responded successfully."
+            : "The process is running, but the command channel did not return the expected acknowledgement.";
+
+        return new ServerSelfTestResult(
+            passed,
+            result.Transport,
+            server.Port,
+            snapshot.ProcessId,
+            message,
+            result.Output,
+            clock.UtcNow);
     }
 
     public async Task<ServerRuntimeStatus> GetRuntimeStatusAsync(Guid serverId, CancellationToken cancellationToken)
