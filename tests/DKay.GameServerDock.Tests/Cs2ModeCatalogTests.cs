@@ -286,9 +286,13 @@ public sealed class Cs2ModeCatalogTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            const string usableMap = "{\"publishedfileid\":\"3141592653\",\"result\":1,\"consumer_appid\":730,\"file_type\":0,\"title\":\"surf_beginner_cs2\",\"file_size\":\"104857600\",\"subscriptions\":\"42000\",\"time_updated\":1770000000,\"preview_url\":\"https://images.steamusercontent.com/example.jpg\",\"tags\":[{\"tag\":\"Surf\",\"display_name\":\"Surf\"}]}";
+            var isSearch = request.RequestUri?.AbsolutePath.Contains("QueryFiles", StringComparison.Ordinal) == true;
             var body = removedDetails
                 ? "{\"response\":{\"result\":1,\"resultcount\":1,\"publishedfiledetails\":[{\"publishedfileid\":\"607186931\",\"result\":9}]}}"
-                : "{\"response\":{\"total\":2,\"publishedfiledetails\":[{\"publishedfileid\":\"3141592653\",\"result\":1,\"consumer_appid\":730,\"file_type\":0,\"title\":\"surf_beginner_cs2\",\"file_size\":\"104857600\",\"subscriptions\":\"42000\",\"time_updated\":1770000000,\"preview_url\":\"https://images.steamusercontent.com/example.jpg\",\"tags\":[{\"tag\":\"Surf\",\"display_name\":\"Surf\"}]},{\"publishedfileid\":\"607186931\",\"result\":9}]}}";
+                : isSearch
+                    ? $"{{\"response\":{{\"total\":2,\"publishedfiledetails\":[{usableMap},{{\"publishedfileid\":\"607186931\",\"result\":9}}]}}}}"
+                    : $"{{\"response\":{{\"result\":1,\"resultcount\":1,\"publishedfiledetails\":[{usableMap}]}}}}";
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
