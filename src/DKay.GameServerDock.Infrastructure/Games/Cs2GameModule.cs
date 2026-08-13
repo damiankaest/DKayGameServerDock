@@ -51,6 +51,9 @@ public sealed class Cs2GameModule(
                 "-port",
                 server.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
+        // Keep this before +map: CS2 only opens its RCON listener after the password is loaded.
+        arguments.Add("+exec");
+        arguments.Add("dkay-rcon.cfg");
         if (!string.IsNullOrWhiteSpace(activeProfile?.WorkshopId))
         {
             arguments.Add("+host_workshop_map");
@@ -63,8 +66,6 @@ public sealed class Cs2GameModule(
         }
         arguments.Add("+exec");
         arguments.Add("dkay-server.cfg");
-        arguments.Add("+exec");
-        arguments.Add("dkay-rcon.cfg");
 
         return new ServerLaunchSpec(
             executable,

@@ -26,7 +26,11 @@ public sealed class Cs2GameServerAdapter(Cs2RconClient rcon) : IGameServerAdapte
         string command,
         CancellationToken cancellationToken)
     {
-        var output = await rcon.ExecuteAsync(server, command, cancellationToken);
+        var uptime = processes.GetSnapshot(server.Id).Uptime;
+        var listenerWait = uptime is not null && uptime < TimeSpan.FromMinutes(2)
+            ? TimeSpan.FromSeconds(30)
+            : TimeSpan.FromSeconds(2);
+        var output = await rcon.ExecuteAsync(server, command, cancellationToken, listenerWait);
         return new ConsoleCommandResult("local-rcon", output);
     }
 }

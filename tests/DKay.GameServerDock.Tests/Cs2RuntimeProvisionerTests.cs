@@ -83,24 +83,45 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
+    public void Prepare_loads_managed_rcon_before_first_map_without_overwriting_autoexec()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = CreateTemporaryDirectory();
+        var cfgRoot = Path.Combine(root, "game", "csgo", "cfg");
+        Directory.CreateDirectory(cfgRoot);
+        File.WriteAllText(Path.Combine(cfgRoot, "autoexec.cfg"), "hostname \"existing\"\n");
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            provisioner.Prepare(server);
+            provisioner.Prepare(server);
+
+            var autoexec = File.ReadAllLines(Path.Combine(cfgRoot, "autoexec.cfg"));
+            Assert.Contains("hostname \"existing\"", autoexec);
+            Assert.Single(autoexec, line => line.Trim().Equals("exec dkay-rcon.cfg", StringComparison.OrdinalIgnoreCase));
+            Assert.True(File.Exists(Path.Combine(cfgRoot, "dkay-rcon.cfg")));
+            Assert.True(File.Exists(Path.Combine(root, ".dkay", "rcon-password")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Authenticates_and_executes_a_local_rcon_command()
     {
         var root = CreateTemporaryDirectory();
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var server = GameServerInstance.Create(
-            Guid.NewGuid(),
-            "CS2 test",
-            "counter-strike-2",
-            root,
-            "latest",
-            port,
-            null,
-            null,
-            4096,
-            "{}",
-            DateTimeOffset.UtcNow);
+        var server = CreateServer(root, port);
         Directory.CreateDirectory(Path.Combine(root, ".dkay"));
         File.WriteAllText(Path.Combine(root, ".dkay", "rcon-password"), "test-password");
 
@@ -109,6 +130,42 @@ public sealed class Cs2RuntimeProvisionerTests
             var fakeServer = RunFakeRconServerAsync(listener);
             var client = new Cs2RconClient(new Cs2RuntimeProvisioner(new DockOptions()));
             var output = await client.ExecuteAsync(server, "echo DKAY_PROBE", CancellationToken.None);
+
+            Assert.Contains("DKAY_PROBE", output, StringComparison.Ordinal);
+            await fakeServer;
+        }
+        finally
+        {
+            listener.Stop();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Waits_for_a_starting_rcon_listener()
+    {
+        var root = CreateTemporaryDirectory();
+        var port = ReserveTcpPort();
+        using var listener = new TcpListener(IPAddress.Loopback, port);
+        var server = CreateServer(root, port);
+        Directory.CreateDirectory(Path.Combine(root, ".dkay"));
+        File.WriteAllText(Path.Combine(root, ".dkay", "rcon-password"), "test-password");
+
+        try
+        {
+            var fakeServer = Task.Run(async () =>
+            {
+                await Task.Delay(250);
+                listener.Start();
+                await RunFakeRconServerAsync(listener);
+            });
+            var client = new Cs2RconClient(new Cs2RuntimeProvisioner(new DockOptions()));
+
+            var output = await client.ExecuteAsync(
+                server,
+                "echo DKAY_PROBE",
+                CancellationToken.None,
+                TimeSpan.FromSeconds(3));
 
             Assert.Contains("DKAY_PROBE", output, StringComparison.Ordinal);
             await fakeServer;
@@ -167,6 +224,26 @@ public sealed class Cs2RuntimeProvisionerTests
         var path = Path.Combine(Path.GetTempPath(), $"dkay-cs2-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static GameServerInstance CreateServer(string root, int port) => GameServerInstance.Create(
+        Guid.NewGuid(),
+        "CS2 test",
+        "counter-strike-2",
+        root,
+        "latest",
+        port,
+        null,
+        null,
+        4096,
+        "{}",
+        DateTimeOffset.UtcNow);
+
+    private static int ReserveTcpPort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     private sealed record TestPacket(int Id, int Type, string Body);
