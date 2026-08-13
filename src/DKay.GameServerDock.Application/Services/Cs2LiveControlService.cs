@@ -76,46 +76,59 @@ public sealed partial class Cs2LiveControlService(
             StringComparer.Ordinal);
         var liveReads = 0;
         var failedReads = 0;
+        var liveValueKeys = new HashSet<string>(StringComparer.Ordinal);
         string? readFailureMessage = null;
+        string? readFailureDetail = null;
         var modeState = await modes.GetStateAsync(server, cancellationToken);
         var activeProfile = modeState.Profiles.FirstOrDefault(profile =>
             string.Equals(profile.Id, modeState.ActiveProfileId, StringComparison.Ordinal));
         var activeHudMode = activeProfile?.HudMode ?? "hidden";
+        var hudLiveReadSucceeded = false;
         var sharpTimerInstalled = modeState.Packages.Any(package =>
             string.Equals(package.Id, "sharp-timer", StringComparison.Ordinal) && package.Installed);
 
         if (running)
         {
             var adapter = modules.GetRequired(server.TemplateId).Adapter;
-            foreach (var setting in store.SettingDefinitions)
+            var outputs = new List<string?>();
+            try
             {
-                try
+                foreach (var command in BuildLiveReadCommands(store.SettingDefinitions))
                 {
                     var result = await adapter.ExecuteConsoleCommandAsync(
                         server,
                         processes,
-                        adapter.NormalizeConsoleCommand(setting.Key),
+                        adapter.NormalizeConsoleCommand(command),
                         cancellationToken);
-                    if (TryReadConsoleVariable(setting.Key, result.Output, out var value) &&
-                        TryNormalizeReportedValue(setting, value, out var normalized))
-                    {
-                        values[setting.Key] = normalized;
-                        liveReads++;
-                    }
-                    else
-                    {
-                        failedReads++;
-                    }
+                    outputs.Add(result.Output);
                 }
-                catch (Exception exception) when (exception is not OperationCanceledException)
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                readFailureDetail = exception.Message;
+            }
+
+            var liveOutput = string.Join(Environment.NewLine, outputs);
+            foreach (var setting in store.SettingDefinitions)
+            {
+                if (TryReadConsoleVariable(setting.Key, liveOutput, out var value) &&
+                    TryNormalizeReportedValue(setting, value, out var normalized))
+                {
+                    values[setting.Key] = normalized;
+                    liveValueKeys.Add(setting.Key);
+                    liveReads++;
+                }
+                else
                 {
                     failedReads++;
-                    if (liveReads == 0)
-                    {
-                        readFailureMessage = $"Saved values are shown because live RCON reading failed: {exception.Message}";
-                        break;
-                    }
                 }
+            }
+
+            if (readFailureDetail is not null)
+            {
+                readFailureMessage = liveReads > 0
+                    ? $"Read {liveReads} settings from CS2; remaining values use their saved fallback because RCON reading stopped: {readFailureDetail}"
+                    : $"Saved values are shown because live RCON reading failed: {readFailureDetail}";
             }
 
             if (sharpTimerInstalled && readFailureMessage is null)
@@ -130,6 +143,7 @@ public sealed partial class Cs2LiveControlService(
                     if (TryResolveReportedHudMode(hudResult.Output, out var reportedHudMode))
                     {
                         activeHudMode = reportedHudMode;
+                        hudLiveReadSucceeded = true;
                     }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
@@ -144,7 +158,16 @@ public sealed partial class Cs2LiveControlService(
             : failedReads == 0
                 ? $"Read all {liveReads} settings directly from the running CS2 process."
                 : $"Read {liveReads} live settings; {failedReads} unsupported values use their saved fallback.");
-        return BuildState(server, running, values, running && liveReads > 0, message, activeHudMode, sharpTimerInstalled);
+        return BuildState(
+            server,
+            running,
+            values,
+            running && liveReads > 0,
+            message,
+            liveValueKeys,
+            activeHudMode,
+            hudLiveReadSucceeded,
+            sharpTimerInstalled);
     }
 
     public async Task<Cs2LiveConfigurationApplyResult> ApplyAsync(
@@ -657,18 +680,53 @@ public sealed partial class Cs2LiveControlService(
         IReadOnlyDictionary<string, string> values,
         bool liveReadSucceeded,
         string liveReadMessage,
+        IReadOnlySet<string> liveValueKeys,
         string activeHudMode,
+        bool hudLiveReadSucceeded,
         bool sharpTimerInstalled) => new(
             running,
             liveReadSucceeded,
             liveReadMessage,
+            clock.UtcNow,
+            liveValueKeys.OrderBy(key => key, StringComparer.Ordinal).ToArray(),
             store.SettingDefinitions,
             values,
             ActionDescriptors,
             store.GetGsltState(server),
             mapChanges.GetState(server.Id),
             activeHudMode,
+            hudLiveReadSucceeded,
             sharpTimerInstalled);
+
+    internal static IReadOnlyList<string> BuildLiveReadCommands(
+        IReadOnlyList<Cs2LiveSettingDescriptor> settings,
+        int maximumLength = 480)
+    {
+        var commands = new List<string>();
+        var keys = new List<string>();
+        var length = 0;
+        foreach (var setting in settings)
+        {
+            var addedLength = setting.Key.Length + (keys.Count == 0 ? 0 : 2);
+            if (keys.Count > 0 && length + addedLength > maximumLength)
+            {
+                commands.Add(string.Join("; ", keys));
+                keys.Clear();
+                length = 0;
+                addedLength = setting.Key.Length;
+            }
+
+            keys.Add(setting.Key);
+            length += addedLength;
+        }
+
+        if (keys.Count > 0)
+        {
+            commands.Add(string.Join("; ", keys));
+        }
+
+        return commands;
+    }
 
     private async Task<GameServerInstance> GetCs2ServerAsync(Guid serverId, CancellationToken cancellationToken)
     {

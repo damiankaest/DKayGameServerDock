@@ -18,6 +18,9 @@ export class ServerDetailComponent implements OnDestroy {
   private readonly id = inject(ActivatedRoute).snapshot.paramMap.get('id')!;
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   private readonly countdownTimer: ReturnType<typeof setInterval>;
+  private liveRefreshInFlight = false;
+  private liveRefreshQueued = false;
+  private lastLiveRefreshAt = 0;
   readonly server = signal<GameServer | null>(null);
   readonly logs = signal<ServerEvent[]>([]);
   readonly logsLoading = signal(true);
@@ -58,6 +61,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly actioning = signal('');
   readonly liveControl = signal<Cs2LiveControlState | null>(null);
   readonly liveValues = signal<Record<string, string>>({});
+  readonly liveObservedValues = signal<Record<string, string>>({});
   readonly liveDirtyKeys = signal<string[]>([]);
   readonly liveLoading = signal(false);
   readonly liveSaving = signal(false);
@@ -171,18 +175,37 @@ export class ServerDetailComponent implements OnDestroy {
     }
   }
 
-  loadCs2Control(): void {
-    this.liveLoading.set(true);
-    this.liveMessage.set('');
-    this.api.cs2LiveControl(this.id).pipe(finalize(() => this.liveLoading.set(false))).subscribe({
+  loadCs2Control(preserveMessage = false, silent = false): void {
+    if (this.liveRefreshInFlight) {
+      this.liveRefreshQueued = true;
+      return;
+    }
+    this.liveRefreshInFlight = true;
+    if (!silent) this.liveLoading.set(true);
+    if (!preserveMessage) this.liveMessage.set('');
+    const dirtyKeys = new Set(this.liveDirtyKeys());
+    const stagedValues = this.liveValues();
+    this.api.cs2LiveControl(this.id).pipe(finalize(() => {
+      this.liveRefreshInFlight = false;
+      if (!silent) this.liveLoading.set(false);
+      if (this.liveRefreshQueued) {
+        this.liveRefreshQueued = false;
+        queueMicrotask(() => this.loadCs2Control(true, true));
+      }
+    })).subscribe({
       next: state => {
         this.liveControl.set(state);
-        this.liveValues.set({ ...state.values });
-        this.liveDirtyKeys.set([]);
-        this.liveMessage.set(state.liveReadMessage);
+        this.liveObservedValues.set({ ...state.values });
+        this.liveValues.set(Object.fromEntries(Object.entries(state.values).map(([key, value]) =>
+          [key, dirtyKeys.has(key) ? stagedValues[key] ?? value : value])));
+        this.liveDirtyKeys.set([...dirtyKeys].filter(key => key in state.values));
+        this.lastLiveRefreshAt = Date.now();
+        if (!preserveMessage) this.liveMessage.set(state.liveReadMessage);
         this.normalizeLiveGroup();
       },
-      error: error => this.error.set(error.error?.detail ?? 'The CS2 live configuration could not be loaded.')
+      error: error => {
+        if (!silent) this.error.set(error.error?.detail ?? 'The CS2 live configuration could not be loaded.');
+      }
     });
   }
 
@@ -305,13 +328,13 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   activeBhopMode(): 'enabled' | 'disabled' | 'mixed' {
-    const enabled = this.liveValues()['sv_enablebunnyhopping'] === '1';
-    const automatic = this.liveValues()['sv_autobunnyhopping'] === '1';
+    const enabled = this.liveObservedValues()['sv_enablebunnyhopping'] === '1';
+    const automatic = this.liveObservedValues()['sv_autobunnyhopping'] === '1';
     return enabled && automatic ? 'enabled' : !enabled && !automatic ? 'disabled' : 'mixed';
   }
 
   activeRespawnMode(): Cs2RespawnMode | 'mixed' {
-    const values = this.liveValues();
+    const values = this.liveObservedValues();
     const t = values['mp_respawn_on_death_t'] === '1';
     const ct = values['mp_respawn_on_death_ct'] === '1';
     const endless = values['mp_ignore_round_win_conditions'] === '1';
@@ -339,14 +362,14 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   activeCombatMode(): Cs2CombatMode {
-    const values = this.liveValues();
+    const values = this.liveObservedValues();
     if (Number(values['mp_damage_scale_ct_body']) === 0 && Number(values['mp_damage_scale_t_body']) === 0) {
       return 'peaceful';
     }
     if (Number(values['mp_teammates_are_enemies']) === 1) {
       return 'ffa';
     }
-    return this.activeModeProfile()?.combatMode ?? 'team';
+    return this.livePolicyObserved('combat') ? 'team' : this.activeModeProfile()?.combatMode ?? 'team';
   }
 
   combatModeForAction(actionId: string): Cs2CombatMode | null {
@@ -365,9 +388,50 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   updateLiveValue(key: string, event: Event): void {
-    const value = (event.target as HTMLInputElement | HTMLSelectElement).value;
+    this.setLiveValue(key, (event.target as HTMLInputElement | HTMLSelectElement).value);
+  }
+
+  setLiveValue(key: string, value: string): void {
     this.liveValues.update(values => ({ ...values, [key]: value }));
-    this.liveDirtyKeys.update(keys => keys.includes(key) ? keys : [...keys, key]);
+    this.liveDirtyKeys.update(keys => value === this.liveObservedValues()[key]
+      ? keys.filter(existing => existing !== key)
+      : keys.includes(key) ? keys : [...keys, key]);
+  }
+
+  isLiveSettingDirty(key: string): boolean {
+    return this.liveDirtyKeys().includes(key);
+  }
+
+  isLiveSettingObserved(key: string): boolean {
+    const control = this.liveControl();
+    return !!control?.running && control.liveValueKeys.includes(key);
+  }
+
+  liveSettingSource(key: string): 'live' | 'saved' | 'fallback' | 'pending' {
+    if (this.isLiveSettingDirty(key)) return 'pending';
+    if (this.isLiveSettingObserved(key)) return 'live';
+    return this.liveControl()?.running ? 'fallback' : 'saved';
+  }
+
+  liveSettingSourceLabel(key: string): string {
+    return ({ live: 'LIVE', saved: 'SAVED', fallback: 'FALLBACK', pending: 'NOT APPLIED' } as const)[this.liveSettingSource(key)];
+  }
+
+  liveSettingValueLabel(setting: Cs2LiveSetting, value: string | undefined): string {
+    if (value === undefined) return 'Unknown';
+    if (setting.type === 'boolean') return value === '1' ? 'ON' : 'OFF';
+    if (setting.type === 'select') return this.liveOptionLabel(setting, value);
+    return value;
+  }
+
+  livePolicyObserved(policy: 'combat' | 'bhop' | 'respawn' | 'hud'): boolean {
+    if (policy === 'hud') return this.liveControl()?.hudLiveReadSucceeded ?? false;
+    const keys = policy === 'combat'
+      ? ['mp_friendlyfire', 'mp_teammates_are_enemies', 'mp_damage_scale_ct_head', 'mp_damage_scale_ct_body', 'mp_damage_scale_t_head', 'mp_damage_scale_t_body', 'mp_damage_headshot_only']
+      : policy === 'bhop'
+        ? ['sv_enablebunnyhopping', 'sv_autobunnyhopping']
+        : ['mp_respawn_on_death_t', 'mp_respawn_on_death_ct', 'mp_ignore_round_win_conditions'];
+    return keys.every(key => this.isLiveSettingObserved(key));
   }
 
   applyLiveConfiguration(): void {
@@ -377,10 +441,12 @@ export class ServerDetailComponent implements OnDestroy {
     this.api.applyCs2LiveControl(this.id, this.liveValues(), this.liveDirtyKeys()).pipe(finalize(() => this.liveSaving.set(false))).subscribe({
       next: result => {
         this.liveValues.set({ ...result.values });
+        this.liveObservedValues.set({ ...result.values });
         this.liveDirtyKeys.set([]);
         this.liveMessage.set(result.message);
         this.appendConsoleMessage(result.message, 'ConfigurationChanged');
         if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
+        this.loadCs2Control(true, true);
       },
       error: error => this.error.set(error.error?.detail ?? 'The live configuration could not be applied.')
     });
@@ -660,13 +726,21 @@ export class ServerDetailComponent implements OnDestroy {
   loadServer(loadModes = false): void {
     this.api.server(this.id).subscribe({
       next: server => {
+        const isRunning = server.status === 'Running' && server.process.isRunning;
         this.server.set(server);
         this.liveControl.update(control => control ? {
           ...control,
-          running: server.status === 'Running' && server.process.isRunning
+          running: isRunning
         } : control);
         if (this.publicationPort() === null) this.publicationPort.set(server.publication.publicPort);
-        if (this.tab() === 'control' && this.liveControl()) this.refreshMapChangeState();
+        if (this.tab() === 'control' && this.liveControl()) {
+          this.refreshMapChangeState();
+          if (server.status === 'Running' && server.process.isRunning && Date.now() - this.lastLiveRefreshAt >= 10000) {
+            this.loadCs2Control(true, true);
+          } else if (!isRunning && (this.liveControl()?.liveValueKeys.length ?? 0) > 0) {
+            this.loadCs2Control(true, true);
+          }
+        }
         if (loadModes && server.templateId === 'counter-strike-2') this.loadCs2Modes();
         else if (server.templateId === 'counter-strike-2' && this.modeState() &&
           (this.tab() === 'modes' ||
@@ -828,6 +902,7 @@ export class ServerDetailComponent implements OnDestroy {
         this.reflectLiveAction(actionId);
         this.appendConsoleMessage(`> ${label} (${result.transport})`, 'ConsoleCommand');
         if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
+        this.loadCs2Control(true, true);
       },
       error: error => this.error.set(error.error?.detail ?? `The '${label}' action could not be executed.`)
     });
@@ -841,8 +916,7 @@ export class ServerDetailComponent implements OnDestroy {
     } as const)[actionId as 'combat-peaceful' | 'combat-team' | 'combat-ffa'];
     if (combatMode) {
       const damageScale = combatMode === 'peaceful' ? '0' : '1';
-      this.liveValues.update(values => ({
-        ...values,
+      this.reflectObservedValues({
         mp_friendlyfire: combatMode === 'ffa' ? '1' : '0',
         mp_teammates_are_enemies: combatMode === 'ffa' ? '1' : '0',
         mp_damage_scale_ct_head: damageScale,
@@ -850,30 +924,28 @@ export class ServerDetailComponent implements OnDestroy {
         mp_damage_scale_t_head: damageScale,
         mp_damage_scale_t_body: damageScale,
         mp_damage_headshot_only: '0'
-      }));
+      });
       this.updateActiveProfilePolicy({ combatMode });
       return;
     }
 
     if (actionId === 'enable-bhop' || actionId === 'disable-bhop') {
       const value = actionId === 'enable-bhop' ? '1' : '0';
-      this.liveValues.update(values => ({
-        ...values,
+      this.reflectObservedValues({
         sv_enablebunnyhopping: value,
         sv_autobunnyhopping: value
-      }));
+      });
       return;
     }
 
     if (actionId === 'respawn-round' || actionId === 'respawn-instant') {
       const respawnMode: Cs2RespawnMode = actionId === 'respawn-instant' ? 'instant' : 'round';
       const value = respawnMode === 'instant' ? '1' : '0';
-      this.liveValues.update(values => ({
-        ...values,
+      this.reflectObservedValues({
         mp_respawn_on_death_t: value,
         mp_respawn_on_death_ct: value,
         mp_ignore_round_win_conditions: value
-      }));
+      });
       this.updateActiveProfilePolicy({ respawnMode });
       return;
     }
@@ -883,6 +955,13 @@ export class ServerDetailComponent implements OnDestroy {
       this.liveControl.update(control => control ? { ...control, activeHudMode: hudMode } : control);
       this.updateActiveProfilePolicy({ hudMode });
     }
+  }
+
+  private reflectObservedValues(update: Record<string, string>): void {
+    const keys = new Set(Object.keys(update));
+    this.liveObservedValues.update(values => ({ ...values, ...update }));
+    this.liveValues.update(values => ({ ...values, ...update }));
+    this.liveDirtyKeys.update(dirty => dirty.filter(key => !keys.has(key)));
   }
 
   private updateActiveProfilePolicy(update: Partial<Pick<Cs2ModeProfile, 'combatMode' | 'respawnMode' | 'hudMode'>>): void {

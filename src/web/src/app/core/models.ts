@@ -351,12 +351,15 @@ export interface Cs2LiveControlState {
   running: boolean;
   liveReadSucceeded: boolean;
   liveReadMessage: string;
+  observedAt: string;
+  liveValueKeys: string[];
   settings: Cs2LiveSetting[];
   values: Record<string, string>;
   actions: Cs2QuickAction[];
   gslt: Cs2GsltState;
   mapChange: Cs2MapChangeState;
   activeHudMode: Cs2HudMode;
+  hudLiveReadSucceeded: boolean;
   sharpTimerInstalled: boolean;
 }
 

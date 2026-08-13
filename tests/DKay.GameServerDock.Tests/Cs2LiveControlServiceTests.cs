@@ -36,6 +36,26 @@ public sealed class Cs2LiveControlServiceTests
     }
 
     [Fact]
+    public void Live_setting_reads_are_batched_without_exceeding_the_console_command_limit()
+    {
+        var settings = Enumerable.Range(1, 40)
+            .Select(index => new Cs2LiveSettingDescriptor(
+                $"setting_{index:D2}_with_a_reasonably_long_name",
+                $"Setting {index}",
+                "Test",
+                "integer",
+                "0",
+                "Test setting."))
+            .ToArray();
+
+        var commands = Cs2LiveControlService.BuildLiveReadCommands(settings);
+
+        Assert.True(commands.Count > 1);
+        Assert.All(commands, command => Assert.InRange(command.Length, 1, 480));
+        Assert.All(settings, setting => Assert.Contains(setting.Key, string.Join("; ", commands)));
+    }
+
+    [Fact]
     public void Bot_changes_recreate_bots_before_loading_the_live_configuration()
     {
         var command = Cs2LiveControlService.BuildLiveApplyCommand(
