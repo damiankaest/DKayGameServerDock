@@ -739,11 +739,39 @@ export class ServerDetailComponent implements OnDestroy {
       next: result => {
         const message = `${label} executed successfully.`;
         this.liveMessage.set(message);
+        this.reflectCombatAction(actionId);
         this.appendConsoleMessage(`> ${label} (${result.transport})`, 'ConsoleCommand');
         if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
       },
       error: error => this.error.set(error.error?.detail ?? `The '${label}' action could not be executed.`)
     });
+  }
+
+  private reflectCombatAction(actionId: string): void {
+    const combatMode = ({
+      'combat-peaceful': 'peaceful',
+      'combat-team': 'team',
+      'combat-ffa': 'ffa'
+    } as const)[actionId as 'combat-peaceful' | 'combat-team' | 'combat-ffa'];
+    if (!combatMode) return;
+
+    const damageScale = combatMode === 'peaceful' ? '0' : '1';
+    this.liveValues.update(values => ({
+      ...values,
+      mp_friendlyfire: combatMode === 'ffa' ? '1' : '0',
+      mp_teammates_are_enemies: combatMode === 'ffa' ? '1' : '0',
+      mp_damage_scale_ct_head: damageScale,
+      mp_damage_scale_ct_body: damageScale,
+      mp_damage_scale_t_head: damageScale,
+      mp_damage_scale_t_body: damageScale,
+      mp_damage_headshot_only: '0'
+    }));
+    this.modeState.update(state => state ? {
+      ...state,
+      profiles: state.profiles.map(profile => profile.id === state.activeProfileId
+        ? { ...profile, combatMode }
+        : profile)
+    } : state);
   }
 
   private appendCommandResult(command: string, result: ConsoleCommandResult): void {

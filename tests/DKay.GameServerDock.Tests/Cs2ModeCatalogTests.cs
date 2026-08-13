@@ -217,6 +217,47 @@ public sealed class Cs2ModeCatalogTests
         }
     }
 
+    [Fact]
+    public async Task Active_combat_mode_can_be_changed_and_persisted_while_the_server_is_running()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-live-combat-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            using var httpClient = new HttpClient();
+            var manager = new Cs2ModeManager(httpClient);
+            await manager.ApplyPresetAsync(
+                server,
+                new ApplyCs2ModePresetRequest(
+                    "rpg-arena",
+                    "fy_pool_day",
+                    null,
+                    0,
+                    1,
+                    false,
+                    new Dictionary<string, string>(),
+                    "team",
+                    "standard",
+                    "hidden"),
+                CancellationToken.None);
+
+            var profile = await manager.SetActiveCombatModeAsync(server, "ffa", CancellationToken.None);
+            var reloaded = await manager.GetStateAsync(server, CancellationToken.None);
+
+            Assert.Equal("ffa", profile.CombatMode);
+            Assert.Equal("ffa", Assert.Single(reloaded.Profiles).CombatMode);
+            var profileConfig = await File.ReadAllTextAsync(Path.Combine(root, "game", "csgo", "cfg", "dkay", "maps", "fy_pool_day.cfg"));
+            var combatConfig = await File.ReadAllTextAsync(Path.Combine(root, "game", "csgo", "cfg", "dkay-combat.cfg"));
+            Assert.Contains("mp_friendlyfire 1", profileConfig);
+            Assert.Contains("mp_teammates_are_enemies 1", profileConfig);
+            Assert.Contains("mp_damage_scale_t_body 1", combatConfig);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("surf")]
     [InlineData("kz")]
