@@ -769,7 +769,7 @@ public sealed partial class Cs2LiveControlService(
         }
 
         value = match.Groups["value"].Value.Trim();
-        return value.Length > 0;
+        return true;
     }
 
     internal static bool TryNormalizeReportedValue(
