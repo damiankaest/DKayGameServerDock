@@ -41,6 +41,20 @@ game/csgo/addons/.dkay/<package>.json
 
 `dkay-server.cfg` executes `dkay-mode.cfg`; the latter selects one generated per-map file. Do not place secrets in a mode profile. The normal server password remains in `dkay-server.cfg` and is removed from API responses.
 
+The **Live control** page deliberately owns a separate layer:
+
+```text
+.dkay/gslt-token
+.dkay/live-settings.json
+game/csgo/cfg/dkay-bootstrap.cfg
+game/csgo/cfg/dkay-gslt.cfg
+game/csgo/cfg/dkay-live.cfg
+```
+
+Files below `.dkay` are canonical private state. Before an update, an existing manually created `dkay-gslt.cfg` is migrated there. On every later start the Dock regenerates the public cfg files, loads RCON and GSLT before the first map, applies the selected map preset and finally applies the administrator's live overrides. This order lets a preset provide its baseline without overwriting explicit live values such as warmup duration, gravity, maximum velocity or private-server cheats.
+
+`sv_cheats` is a global CS2 server variable, not a per-Steam-user permission. Enabling **Private-server cheats** therefore affects every connected player. Keep it enabled only on a trusted private server.
+
 Metamod installation adds `Game csgo/addons/metamod` as the first `SearchPaths` entry in `gameinfo.gi`. The unmodified file is saved once as `gameinfo.gi.dkay-original`. Steam updates may overwrite `gameinfo.gi`; the Dock reapplies the entry after a managed CS2 update when the Metamod marker is present.
 
 ## Package security and update behavior

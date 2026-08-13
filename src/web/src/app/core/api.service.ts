@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ApplyCs2ModePresetRequest, ConsoleCommandResult, CreateServerRequest, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication, ServerSelfTestResult } from './models';
+import { ApplyCs2ModePresetRequest, ConfigureCs2GsltResult, ConsoleCommandResult, CreateServerRequest, Cs2LiveConfigurationApplyResult, Cs2LiveControlState, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication, ServerSelfTestResult } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -78,6 +78,22 @@ export class ApiService {
 
   installCs2Package(id: string, packageId: string): Observable<void> {
     return this.http.post<void>(`/api/servers/${id}/cs2-packages/${packageId}/install`, {});
+  }
+
+  cs2LiveControl(id: string): Observable<Cs2LiveControlState> {
+    return this.http.get<Cs2LiveControlState>(`/api/servers/${id}/cs2-control`);
+  }
+
+  applyCs2LiveControl(id: string, values: Record<string, string>): Observable<Cs2LiveConfigurationApplyResult> {
+    return this.http.put<Cs2LiveConfigurationApplyResult>(`/api/servers/${id}/cs2-control`, { values });
+  }
+
+  runCs2Action(id: string, actionId: string, value: string | null = null): Observable<ConsoleCommandResult> {
+    return this.http.post<ConsoleCommandResult>(`/api/servers/${id}/cs2-control/actions`, { actionId, value });
+  }
+
+  configureCs2Gslt(id: string, token: string): Observable<ConfigureCs2GsltResult> {
+    return this.http.put<ConfigureCs2GsltResult>(`/api/servers/${id}/cs2-control/gslt`, { token });
   }
 
   sendCommand(id: string, command: string): Observable<ConsoleCommandResult> {

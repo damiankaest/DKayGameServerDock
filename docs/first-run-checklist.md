@@ -31,8 +31,10 @@ Do not create a router forwarding rule for administrator port `5080`.
 2. Use a clear test name, the default port `27015`, an initial stock map and enough RAM.
 3. Create the server and watch SteamCMD progress until its state is `Stopped`.
 4. Open **Modes & maps**, select Classic first, apply a stock map without extra plugins and start the server.
-5. Confirm console output appears and stop the server through the UI.
-6. Then test Surf/Bhop/KZ and the managed package stack separately.
+5. Open **Live control**, store the App `730` GSLT, apply the desired private practice settings and run the self-test.
+6. Use **Start match**, **Add CT bot**, **Kill bots** and **Restart round** once to verify guided RCON controls without a gaming PC.
+7. Confirm console output appears and stop the server through the UI.
+8. Then test Surf/Bhop/KZ and the managed package stack separately.
 
 Testing a vanilla profile before third-party packages distinguishes base installation failures from mod compatibility problems.
 

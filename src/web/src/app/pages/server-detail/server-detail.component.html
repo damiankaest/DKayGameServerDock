@@ -18,7 +18,7 @@
       <section class="install-banner"><div><strong>{{ progress()?.message || 'Preparing installation…' }}</strong><small>{{ progress()?.stage || current.status }}</small></div><b>{{ progress()?.percent || 0 }}%</b><div class="meter"><i [style.width.%]="progress()?.percent || 0"></i></div></section>
     }
 
-    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="tab.set('overview')">Overview</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'modes'" (click)="tab.set('modes')">Modes & maps</button> }<button [class.active]="tab() === 'console'" (click)="tab.set('console')">Console</button><button [class.active]="tab() === 'players'" (click)="tab.set('players')">Players <i>{{ current.players.length }}</i></button></nav>
+    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="selectTab('overview')">Overview</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'control'" (click)="selectTab('control')">Live control</button><button [class.active]="tab() === 'modes'" (click)="selectTab('modes')">Modes & maps</button> }<button [class.active]="tab() === 'console'" (click)="selectTab('console')">Console</button><button [class.active]="tab() === 'players'" (click)="selectTab('players')">Players <i>{{ current.players.length }}</i></button></nav>
 
     @if (tab() === 'overview') {
       <div class="detail-grid">
@@ -123,18 +123,104 @@
           <div class="skeleton-block tall"></div>
         }
       </div>
+    } @else if (tab() === 'control') {
+      <div class="live-control-workbench">
+        <section class="panel full live-control-hero">
+          <div>
+            <p class="eyebrow">MATCH DIRECTOR</p>
+            <h2>Control the running server without memorizing console commands</h2>
+            <p>Round flow, bots, movement and private practice settings are applied through the protected local RCON channel.</p>
+          </div>
+          <div class="live-control-status">
+            <span class="status" [attr.data-status]="current.status">{{ current.status }}</span>
+            <button class="secondary-button small" type="button" [disabled]="liveLoading() || liveSaving() || liveAction() !== ''" (click)="loadCs2Control()">{{ liveLoading() ? 'Reading…' : '↻ Refresh live values' }}</button>
+          </div>
+        </section>
+
+        @if (liveMessage()) {
+          <p class="live-control-message">{{ liveMessage() }}</p>
+        }
+
+        @if (liveLoading() && !liveControl()) {
+          <div class="skeleton-block tall full"></div>
+        } @else if (liveControl(); as control) {
+          <section class="panel full live-actions-panel">
+            <header><div><p class="eyebrow">ONE-CLICK ACTIONS</p><h2>Match and practice controls</h2></div><small>{{ control.actions.length }} safe actions</small></header>
+            <div class="live-action-groups">
+              @for (group of liveActionGroups(); track group) {
+                <div class="live-action-group">
+                  <h3>{{ group }}</h3>
+                  <div class="live-action-grid">
+                    @for (action of liveActionsFor(group); track action.id) {
+                      <button type="button" [class.primary]="action.tone === 'primary'" [class.danger]="action.tone === 'danger'" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                        <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
+                        <strong>{{ action.label }}</strong>
+                        <small>{{ action.description }}</small>
+                        @if (action.requiresPlugin) { <em>PLUGIN</em> }
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            @if (!control.running) { <p class="readiness-note">Start the server to enable live actions. Configuration and Steam identity can still be prepared while it is stopped.</p> }
+          </section>
+
+          <section class="panel live-map-panel">
+            <header><div><p class="eyebrow">MAP CONTROL</p><h2>Change map now</h2></div><span>LIVE</span></header>
+            <p>Enter a stock or already installed Workshop map name. Players remain connected while CS2 changes level.</p>
+            <div class="live-inline-form">
+              <input maxlength="64" placeholder="de_mirage" [value]="liveMap()" (input)="updateLiveMap($event)" />
+              <button class="primary-button" type="button" [disabled]="!control.running || liveAction() !== '' || !liveMap().trim()" (click)="changeLiveMap()">{{ liveAction() === 'change-map' ? 'Changing…' : 'Change map' }}</button>
+            </div>
+          </section>
+
+          <section class="panel gslt-panel" [class.configured]="control.gslt.configured">
+            <header><div><p class="eyebrow">STEAM IDENTITY</p><h2>Game Server Login Token</h2></div><span>{{ control.gslt.configured ? 'PROTECTED' : 'MISSING' }}</span></header>
+            <p>{{ control.gslt.message }}</p>
+            @if (control.gslt.maskedToken) { <code>{{ control.gslt.maskedToken }}</code> }
+            <div class="live-inline-form">
+              <input type="password" autocomplete="new-password" placeholder="Paste a new App 730 GSLT" [value]="gsltToken()" (input)="updateGsltToken($event)" />
+              <button class="secondary-button" type="button" [disabled]="gsltSaving() || !gsltToken()" (click)="saveGslt()">{{ gsltSaving() ? 'Protecting…' : control.gslt.configured ? 'Replace token' : 'Save token' }}</button>
+            </div>
+            <small>The token is never returned to the browser. DKay stores it under <code>.dkay</code> and regenerates the CS2 cfg after every Hub, SteamCMD or preset update.</small>
+          </section>
+
+          <section class="panel full live-config-panel">
+            <header>
+              <div><p class="eyebrow">LIVE CONFIGURATION</p><h2>Runtime settings</h2><p>{{ control.liveReadMessage }}</p></div>
+              <button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply to live server' : 'Save for next start' }}</button>
+            </header>
+            <div class="live-setting-groups">
+              @for (group of liveGroups(); track group) {
+                <section class="live-setting-group">
+                  <h3>{{ group }}</h3>
+                  <div class="live-setting-grid">
+                    @for (setting of liveSettingsFor(group); track setting.key) {
+                      <label [class.cheat-setting]="setting.key === 'sv_cheats'">
+                        <span><strong>{{ setting.label }}</strong><code>{{ setting.key }}</code></span>
+                        @if (setting.type === 'boolean') {
+                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)"><option value="1">Enabled</option><option value="0">Disabled</option></select>
+                        } @else if (setting.type === 'select') {
+                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)">@for (option of setting.options || []; track option) { <option [value]="option">{{ option }}</option> }</select>
+                        } @else {
+                          <input type="number" [min]="setting.minimum" [max]="setting.maximum" [step]="setting.step || (setting.type === 'integer' ? 1 : 'any')" [value]="liveValues()[setting.key]" (input)="updateLiveValue(setting.key, $event)" />
+                        }
+                        <small>{{ setting.description }}</small>
+                      </label>
+                    }
+                  </div>
+                </section>
+              }
+            </div>
+            <div class="live-config-footer"><span><i></i>Values are persisted outside generated preset files</span><button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply changes' : 'Save changes' }}</button></div>
+          </section>
+        }
+      </div>
     } @else if (tab() === 'console') {
       @if (current.templateId === 'counter-strike-2') {
         <section class="console-tools">
-          <header><div><p class="eyebrow">CS2 ADMIN CONTROLS</p><h2>Quick commands & self-test</h2></div><button class="secondary-button small" type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="runSelfTest()">{{ commandAction() === 'self-test' ? 'Testing…' : 'Run self-test' }}</button></header>
-          <div class="quick-command-grid">
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('start-round', 'mp_warmup_end; mp_restartgame 1')"><span>▶</span><strong>Start round</strong><small>End warmup and restart</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('add-bot-ct', 'bot_add_ct')"><span>＋</span><strong>Add CT bot</strong><small>Add one counter-terrorist</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('add-bot-t', 'bot_add_t')"><span>＋</span><strong>Add T bot</strong><small>Add one terrorist</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('kill-bots', 'bot_kill')"><span>⌁</span><strong>Kill bots</strong><small>End current bot lives</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('remove-bots', 'bot_kick')"><span>−</span><strong>Remove bots</strong><small>Kick every bot</small></button>
-            <button class="danger" type="button" [disabled]="current.status !== 'Running' || actioning() !== ''" (click)="action('stop')"><span>■</span><strong>Quit server</strong><small>Graceful RCON shutdown</small></button>
-          </div>
+          <header><div><p class="eyebrow">RAW CONSOLE</p><h2>Advanced commands & diagnostics</h2><p class="muted">Everyday controls now live in the guided Live control tab. Use this terminal for commands that are not part of the safe control catalog.</p></div><button class="secondary-button small" type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="runSelfTest()">{{ commandAction() === 'self-test' ? 'Testing…' : 'Run self-test' }}</button></header>
           @if (selfTestResult(); as test) { <div class="self-test-result" [class.passed]="test.passed"><strong>{{ test.passed ? '✓ Command channel ready' : '✕ Command channel failed' }}</strong><span>{{ test.message }}</span><code>{{ test.transport }} · 127.0.0.1:{{ test.port }} · PID {{ test.processId || '—' }}</code></div> }
         </section>
       }

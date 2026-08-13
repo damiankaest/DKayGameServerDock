@@ -28,6 +28,7 @@ public sealed class Cs2Installer(
         Func<InstallationProgress, CancellationToken, Task> reportProgress,
         CancellationToken cancellationToken)
     {
+        runtime.ProtectPersistentState(server);
         await _steam.UpdateAsync(server, reportProgress, cancellationToken);
         runtime.Prepare(server);
         await WriteServerConfigAsync(server, cancellationToken);

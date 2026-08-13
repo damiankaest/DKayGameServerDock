@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ServerOrchestrator>();
         services.AddScoped<Cs2ModeService>();
+        services.AddScoped<Cs2LiveControlService>();
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IHostMetricsProvider, HostMetricsProvider>();
@@ -41,6 +42,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new HttpClient());
         services.AddSingleton<PaperInstaller>();
         services.AddSingleton<Cs2RuntimeProvisioner>();
+        services.AddSingleton<ICs2RuntimeControlStore>(provider =>
+            provider.GetRequiredService<Cs2RuntimeProvisioner>());
         services.AddSingleton<Cs2RconClient>();
         services.AddSingleton<Cs2Installer>();
         services.AddSingleton<ICs2ModeManager, Cs2ModeManager>();

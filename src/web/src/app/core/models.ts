@@ -256,3 +256,57 @@ export interface Cs2ModeApplyResult {
   state: Cs2ModeState;
   queuedPackageIds: string[];
 }
+
+export interface Cs2LiveSetting {
+  key: string;
+  label: string;
+  group: string;
+  type: 'integer' | 'decimal' | 'boolean' | 'select';
+  defaultValue: string;
+  description: string;
+  minimum: number | null;
+  maximum: number | null;
+  step: number | null;
+  options: string[] | null;
+}
+
+export interface Cs2QuickAction {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  icon: string;
+  tone: 'default' | 'primary' | 'danger';
+  requiresPlugin: boolean;
+}
+
+export interface Cs2GsltState {
+  configured: boolean;
+  maskedToken: string | null;
+  protectedFromGameUpdates: boolean;
+  message: string;
+}
+
+export interface Cs2LiveControlState {
+  running: boolean;
+  liveReadSucceeded: boolean;
+  liveReadMessage: string;
+  settings: Cs2LiveSetting[];
+  values: Record<string, string>;
+  actions: Cs2QuickAction[];
+  gslt: Cs2GsltState;
+}
+
+export interface Cs2LiveConfigurationApplyResult {
+  values: Record<string, string>;
+  appliedLive: boolean;
+  message: string;
+  output: string | null;
+}
+
+export interface ConfigureCs2GsltResult {
+  state: Cs2GsltState;
+  appliedLive: boolean;
+  message: string;
+  output: string | null;
+}
