@@ -1,56 +1,67 @@
 <main class="guest-page">
-  <header class="guest-hero">
-    <div class="brand-mark"><span>DK</span></div>
-    <p class="eyebrow">PRIVATE GAME NIGHT</p>
-    <h1>{{ listing()?.name || 'DKay Game Servers' }}</h1>
-    <p>Choose a published server, copy its address and join from your game.</p>
-  </header>
+  <div class="guest-shell">
+    <header class="guest-topbar">
+      <div class="guest-brand"><div class="brand-mark"><span>DK</span></div><span><strong>DKay</strong><small>SERVER DOCK</small></span></div>
+      <span class="guest-access-badge"><i></i> Guest access</span>
+    </header>
 
-  @if (error()) {
-    <section class="guest-message error-banner">
-      <strong>Guest portal offline</strong>
-      <p>{{ error() }}</p>
-      <button class="secondary-button" type="button" (click)="load()">Try again</button>
+    <section class="guest-hero">
+      <p class="eyebrow">PRIVATE GAME NIGHT</p>
+      <h1>{{ listing()?.name || 'DKay Game Servers' }}</h1>
+      <p>Pick a live server, copy its address, then connect directly from your game. No account or administrator access required.</p>
     </section>
-  } @else if (loading()) {
-    <div class="guest-server-grid">
-      <div class="skeleton-block tall"></div>
-      <div class="skeleton-block tall"></div>
-    </div>
-  } @else if (listing(); as current) {
-    <section class="guest-server-grid">
-      @for (server of current.servers; track server.name + server.joinAddress) {
-        <article class="guest-server-card">
-          <header>
-            <span class="game-icon xlarge">{{ server.templateIcon }}</span>
-            <span class="status large" [attr.data-status]="server.status">{{ server.status }}</span>
-          </header>
-          <div>
-            <p class="eyebrow">{{ server.templateName }}</p>
-            <h2>{{ server.name }}</h2>
+
+    @if (error() && !listing()) {
+      <section class="guest-message error-banner">
+        <span class="guest-message-icon">!</span><strong>Guest portal unavailable</strong>
+        <p>{{ error() }}</p>
+        <button class="secondary-button" type="button" (click)="load()">Try again</button>
+      </section>
+    } @else if (loading()) {
+      <div class="guest-server-grid" aria-label="Loading public servers">
+        <div class="skeleton-block tall"></div>
+        <div class="skeleton-block tall"></div>
+      </div>
+    } @else if (listing(); as current) {
+      <section class="guest-overview" aria-live="polite">
+        <div><span class="guest-live-dot"></span><strong>{{ onlineCount(current) }}</strong><small>of {{ current.servers.length }} server{{ current.servers.length === 1 ? '' : 's' }} ready</small></div>
+        <div class="guest-overview-actions"><small>Updated {{ formatUpdated(current.generatedAt) }}</small><button class="guest-refresh" type="button" [disabled]="refreshing()" (click)="load(true)"><span [class.spinning]="refreshing()">↻</span>{{ refreshing() ? 'Refreshing' : 'Refresh' }}</button></div>
+      </section>
+
+      @if (error()) { <p class="guest-inline-warning">{{ error() }}</p> }
+      @if (copyError()) { <p class="guest-inline-warning" aria-live="assertive">{{ copyError() }}</p> }
+
+      <section class="guest-server-grid">
+        @for (server of current.servers; track server.name + server.joinAddress) {
+          <article class="guest-server-card" [class.offline]="server.status !== 'Running'">
+            <header>
+              <div class="guest-game"><span class="game-icon xlarge">{{ server.templateIcon }}</span><span><small>{{ server.templateName }}</small><strong>{{ server.name }}</strong></span></div>
+              <span class="status large" [attr.data-status]="server.status">{{ server.status }}</span>
+            </header>
+            <dl>
+              @if (server.mode || server.map) { <div><dt>Mode / map</dt><dd>{{ server.mode || 'Custom' }} · {{ server.map || 'rotation' }}</dd></div> }
+              <div><dt>Network</dt><dd>{{ server.protocols.join(' + ') }} · port {{ server.publicPort }}</dd></div>
+              <div><dt>Player slots</dt><dd>{{ server.maxPlayers || 'Game default' }}</dd></div>
+              <div><dt>Access</dt><dd>{{ server.passwordProtected ? 'Password required' : 'Open to friends' }}</dd></div>
+            </dl>
+            <div class="guest-connect-hint"><small>GAME CONSOLE</small><code>connect {{ server.joinAddress }}</code></div>
+            <button class="copy-address" type="button" [disabled]="server.status !== 'Running'" (click)="copy(server.joinAddress)">
+              <span><small>SERVER ADDRESS</small><code>{{ server.joinAddress }}</code></span>
+              <b>{{ copied() === server.joinAddress ? '✓ Copied' : 'Copy address' }}</b>
+            </button>
+            @if (server.status !== 'Running') { <small class="guest-offline-hint">Published, but currently offline. Ask the host to start it.</small> }
+          </article>
+        } @empty {
+          <div class="guest-empty">
+            <span class="guest-empty-icon">⌁</span>
+            <p class="eyebrow">PORTAL READY</p>
+            <h2>No game servers are shared yet</h2>
+            <p>The guest portal is online. Ask the host to publish a server from its <strong>Friend access</strong> settings, then refresh this page.</p>
+            <button class="secondary-button" type="button" [disabled]="refreshing()" (click)="load(true)">↻ Check again</button>
           </div>
-          <dl>
-            @if (server.mode || server.map) { <div><dt>Mode / map</dt><dd>{{ server.mode || 'Custom' }} · {{ server.map || 'rotation' }}</dd></div> }
-            <div><dt>Network</dt><dd>{{ server.protocols.join(' + ') }} · :{{ server.publicPort }}</dd></div>
-            <div><dt>Slots</dt><dd>{{ server.maxPlayers || 'Game default' }}</dd></div>
-            <div><dt>Access</dt><dd>{{ server.passwordProtected ? 'Password protected' : 'Open to friends' }}</dd></div>
-          </dl>
-          <button class="copy-address" type="button" [disabled]="server.status !== 'Running'" (click)="copy(server.joinAddress)">
-            <span><small>JOIN ADDRESS</small><code>{{ server.joinAddress }}</code></span>
-            <b>{{ copied() === server.joinAddress ? 'Copied!' : 'Copy' }}</b>
-          </button>
-          @if (server.status !== 'Running') {
-            <small class="guest-offline-hint">This server is published but currently not running.</small>
-          }
-        </article>
-      } @empty {
-        <div class="guest-empty">
-          <span>◌</span>
-          <h2>No servers published yet</h2>
-          <p>The host has not shared a game server at the moment.</p>
-        </div>
-      }
-    </section>
-    <footer class="guest-footer">Read-only guest view · no administrator access · updated {{ current.generatedAt }}</footer>
-  }
+        }
+      </section>
+      <footer class="guest-footer"><span><i></i> Guest portal online</span><span>Read-only view · administrator routes are unavailable on this port</span></footer>
+    }
+  </div>
 </main>

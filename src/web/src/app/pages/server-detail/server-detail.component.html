@@ -7,7 +7,7 @@
       <div class="server-title"><span class="game-icon xlarge">{{ current.templateIcon }}</span><div><p class="eyebrow">{{ current.templateName }}</p><h1>{{ current.name }}</h1><p class="muted">LAN :{{ current.port }} · PID {{ current.process.processId || '—' }}</p></div></div>
       <div class="detail-actions"><span class="status large" [attr.data-status]="current.status">{{ current.status }}</span>
         @if (current.status === 'Running') { <button class="secondary-button" [disabled]="actioning() !== ''" (click)="action('restart')">{{ actioning() === 'restart' ? 'Restarting…' : '↻ Restart' }}</button><button class="danger-button" [disabled]="actioning() !== ''" (click)="action('stop')">{{ actioning() === 'stop' ? 'Stopping…' : '■ Stop' }}</button> }
-        @else if (current.status === 'Stopped' || current.status === 'Crashed') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starting…' : '▶ Start' }}</button> }
+        @else if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starting…' : '▶ Start' }}</button> }
         @if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="danger-button" [disabled]="actioning() !== ''" (click)="deleteServer()">{{ actioning() === 'delete' ? 'Deleting…' : 'Delete' }}</button> }
       </div>
     </header>
@@ -57,7 +57,7 @@
     } @else if (tab() === 'modes') {
       <div class="mode-workbench">
         <section class="panel full mode-intro">
-          <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' ? 'Ready to configure' : 'Stop required' }}</span></header>
+          <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Ready to configure' : 'Stop required' }}</span></header>
           <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
         </section>
 
@@ -124,7 +124,26 @@
         }
       </div>
     } @else if (tab() === 'console') {
-      <section class="console-panel"><header><div><i></i><i></i><i></i><span>live console</span></div><small>{{ current.status }}</small></header>@if (logsError()) { <p class="publication-warning">{{ logsError() }}</p> }<div class="console-output">@for (log of consoleLogs(); track log.occurredAt + log.message) { <p><time>{{ log.occurredAt | date:'HH:mm:ss' }}</time><span>{{ log.message }}</span></p> } @empty { <p class="console-empty">{{ logsLoading() ? 'Loading console history…' : 'Waiting for server output…' }}</p> }</div><form (submit)="$event.preventDefault(); sendCommand()"><span>›</span><input placeholder="Enter server command" [value]="command()" (input)="updateCommand($event)" [disabled]="current.status !== 'Running'" /><button type="submit" [disabled]="current.status !== 'Running'">Send</button></form></section>
+      @if (current.templateId === 'counter-strike-2') {
+        <section class="console-tools">
+          <header><div><p class="eyebrow">CS2 ADMIN CONTROLS</p><h2>Quick commands & self-test</h2></div><button class="secondary-button small" type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="runSelfTest()">{{ commandAction() === 'self-test' ? 'Testing…' : 'Run self-test' }}</button></header>
+          <div class="quick-command-grid">
+            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('start-round', 'mp_warmup_end; mp_restartgame 1')"><span>▶</span><strong>Start round</strong><small>End warmup and restart</small></button>
+            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('add-bot-ct', 'bot_add_ct')"><span>＋</span><strong>Add CT bot</strong><small>Add one counter-terrorist</small></button>
+            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('add-bot-t', 'bot_add_t')"><span>＋</span><strong>Add T bot</strong><small>Add one terrorist</small></button>
+            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('kill-bots', 'bot_kill')"><span>⌁</span><strong>Kill bots</strong><small>End current bot lives</small></button>
+            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('remove-bots', 'bot_kick')"><span>−</span><strong>Remove bots</strong><small>Kick every bot</small></button>
+            <button class="danger" type="button" [disabled]="current.status !== 'Running' || actioning() !== ''" (click)="action('stop')"><span>■</span><strong>Quit server</strong><small>Graceful RCON shutdown</small></button>
+          </div>
+          @if (selfTestResult(); as test) { <div class="self-test-result" [class.passed]="test.passed"><strong>{{ test.passed ? '✓ Command channel ready' : '✕ Command channel failed' }}</strong><span>{{ test.message }}</span><code>{{ test.transport }} · 127.0.0.1:{{ test.port }} · PID {{ test.processId || '—' }}</code></div> }
+        </section>
+      }
+      <section class="console-panel">
+        <header><div><i></i><i></i><i></i><span>live console</span></div><small>{{ current.status }}</small></header>
+        @if (logsError()) { <p class="publication-warning">{{ logsError() }}</p> }
+        <div class="console-output">@for (log of consoleLogs(); track log.occurredAt + log.message) { <p><time>{{ log.occurredAt | date:'HH:mm:ss' }}</time><span>{{ log.message }}</span></p> } @empty { <p class="console-empty">{{ logsLoading() ? 'Loading console history…' : 'Waiting for server output…' }}</p> }</div>
+        <form (submit)="$event.preventDefault(); sendCommand()"><span>›</span><input placeholder="Enter server command" [value]="command()" (input)="updateCommand($event)" [disabled]="current.status !== 'Running' || commandAction() !== ''" /><button type="submit" [disabled]="current.status !== 'Running' || commandAction() !== ''">{{ commandAction() === 'custom' ? 'Sending…' : 'Send' }}</button></form>
+      </section>
     } @else {
       <section class="panel"><header><h2>Connected players</h2><span class="muted">Adapter capability</span></header><div class="player-list">@for (player of current.players; track player.id) { <div><span class="avatar">{{ player.name[0] }}</span><strong>{{ player.name }}</strong><code>{{ player.id }}</code><small>{{ player.ping ?? '—' }} ms</small></div> } @empty { <div class="empty-state compact"><h3>No players reported</h3><p>The initial adapters expose the extension point; query/RCON player discovery follows next.</p></div> }</div></section>
     }

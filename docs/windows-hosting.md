@@ -60,6 +60,8 @@ Game server files and application data are outside the publish directory, so app
 
 - **UI opens locally but not from another device:** check Windows Firewall and confirm the service listens on `0.0.0.0:5080`.
 - **CS2 installation immediately fails:** verify the service account can execute the exact `DGS_STEAMCMD_PATH` and write to `C:\GameServers`.
+- **CS2 reports that no Steam client could be found:** update the Dock and start the instance again. The Dock now provisions SteamCMD's three 64-bit runtime DLLs automatically before each Windows start. If provisioning reports missing files, run the configured `steamcmd.exe +quit` once and retry.
+- **Verify CS2 without a gaming PC:** open the instance's **Console** tab and run **Run self-test**. A green result proves that the process, local game port, RCON authentication and command execution are working.
 - **Paper installation works but start fails:** run the configured Java executable as the service account and check the required Java major version.
 - **Metrics are empty:** confirm the service account can enumerate fixed drives and network adapters.
 - **Host readiness reports a missing runtime:** set `DGS_JAVA_PATH` or `DGS_STEAMCMD_PATH` as a machine environment variable and restart the Windows service.

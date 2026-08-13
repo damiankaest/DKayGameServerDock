@@ -7,6 +7,7 @@ namespace DKay.GameServerDock.Infrastructure.Games;
 public sealed class BasicGameServerAdapter(string gracefulStopCommand, string? fixedMap = null) : IGameServerAdapter
 {
     public string GracefulStopCommand { get; } = gracefulStopCommand;
+    public bool HandlesCommandsExternally => false;
 
     public Task<IReadOnlyList<PlayerInfo>> GetPlayersAsync(
         GameServerInstance server,
@@ -26,5 +27,14 @@ public sealed class BasicGameServerAdapter(string gracefulStopCommand, string? f
 
         return normalized;
     }
-}
 
+    public async Task<ConsoleCommandResult> ExecuteConsoleCommandAsync(
+        GameServerInstance server,
+        IProcessSupervisor processes,
+        string command,
+        CancellationToken cancellationToken)
+    {
+        await processes.SendCommandAsync(server.Id, command, cancellationToken);
+        return new ConsoleCommandResult("standard-input", null);
+    }
+}

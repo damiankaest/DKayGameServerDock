@@ -151,6 +151,21 @@ export interface ServerEvent {
   occurredAt: string;
 }
 
+export interface ConsoleCommandResult {
+  transport: string;
+  output: string | null;
+}
+
+export interface ServerSelfTestResult {
+  passed: boolean;
+  transport: string;
+  port: number;
+  processId: number | null;
+  message: string;
+  output: string | null;
+  checkedAt: string;
+}
+
 export interface CreateServerRequest {
   name: string;
   templateId: string;

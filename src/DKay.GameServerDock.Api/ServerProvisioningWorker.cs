@@ -37,10 +37,17 @@ public sealed class ServerProvisioningWorker(
                 else
                 {
                     var modes = scope.ServiceProvider.GetRequiredService<Cs2ModeService>();
-                    await modes.InstallPackageAsync(
-                        item.ServerId,
-                        item.Argument ?? throw new InvalidOperationException("The CS2 package id is missing."),
-                        stoppingToken);
+                    var packageIds = (item.Argument ?? throw new InvalidOperationException("The CS2 package id is missing."))
+                        .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (packageIds.Length == 0)
+                    {
+                        throw new InvalidOperationException("The CS2 package stack is empty.");
+                    }
+
+                    foreach (var packageId in packageIds)
+                    {
+                        await modes.InstallPackageAsync(item.ServerId, packageId, stoppingToken);
+                    }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

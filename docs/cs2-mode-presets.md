@@ -46,6 +46,7 @@ Metamod installation adds `Game csgo/addons/metamod` as the first `SearchPaths` 
 ## Package security and update behavior
 
 - Package IDs, publishers, project URLs and dependency graphs are compiled into the server; requests cannot supply a URL.
+- A recommended package stack is processed as one ordered job. If one dependency fails, later packages are not attempted and the first actionable error remains visible.
 - GitHub downloads use the selected repository's latest release ZIP. Metamod uses the official AlliedModders 2.0 snapshot channel.
 - Downloads are capped at 256 MB; expanded archives are capped at 512 MB and 10,000 entries.
 - Extraction happens in a staging directory. Absolute paths, `..` traversal and symbolic links are rejected before deployment.

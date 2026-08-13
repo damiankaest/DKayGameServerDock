@@ -40,6 +40,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(new HttpClient());
         services.AddSingleton<PaperInstaller>();
+        services.AddSingleton<Cs2RuntimeProvisioner>();
+        services.AddSingleton<Cs2RconClient>();
         services.AddSingleton<Cs2Installer>();
         services.AddSingleton<ICs2ModeManager, Cs2ModeManager>();
         services.AddSingleton<IGameModule, PaperGameModule>();

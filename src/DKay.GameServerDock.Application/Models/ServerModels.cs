@@ -42,6 +42,17 @@ public sealed record InstallationProgress(int Percent, string Stage, string Mess
 
 public sealed record ProcessOutputLine(DateTimeOffset Timestamp, string Stream, string Text);
 
+public sealed record ConsoleCommandResult(string Transport, string? Output);
+
+public sealed record ServerSelfTestResult(
+    bool Passed,
+    string Transport,
+    int Port,
+    int? ProcessId,
+    string Message,
+    string? Output,
+    DateTimeOffset CheckedAt);
+
 public sealed record PlayerInfo(string Name, string Id, int? Ping, TimeSpan? ConnectionTime);
 
 public sealed record ServerRuntimeStatus(

@@ -48,6 +48,8 @@ public static class ServerEndpoints
         group.MapPut("/{id:guid}/cs2-mode", ApplyCs2ModeAsync);
         group.MapPost("/{id:guid}/cs2-packages/{packageId}/install", QueueCs2PackageAsync);
         group.MapPost("/{id:guid}/command", SendCommandAsync);
+        group.MapPost("/{id:guid}/self-test", async (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
+            Results.Ok(await orchestrator.TestCommandChannelAsync(id, token)));
         group.MapGet("/{id:guid}/players", async (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
             Results.Ok((await orchestrator.GetRuntimeStatusAsync(id, token)).Players));
         group.MapGet("/{id:guid}/logs", async (Guid id, IServerRepository servers, int? take, CancellationToken token) =>
@@ -167,9 +169,11 @@ public static class ServerEndpoints
         CancellationToken cancellationToken)
     {
         var result = await modes.ApplyPresetAsync(id, request, cancellationToken);
-        foreach (var packageId in result.QueuedPackageIds)
+        if (result.QueuedPackageIds.Count > 0)
         {
-            await queue.EnqueueAsync(new ServerWorkItem(id, ServerWorkKind.InstallCs2Package, packageId), cancellationToken);
+            await queue.EnqueueAsync(
+                new ServerWorkItem(id, ServerWorkKind.InstallCs2Package, string.Join("\n", result.QueuedPackageIds)),
+                cancellationToken);
         }
 
         return Results.Ok(result);
@@ -182,10 +186,10 @@ public static class ServerEndpoints
         IServerWorkQueue queue,
         CancellationToken cancellationToken)
     {
-        foreach (var item in modes.ResolveAutomaticInstallOrder([packageId]))
-        {
-            await queue.EnqueueAsync(new ServerWorkItem(id, ServerWorkKind.InstallCs2Package, item), cancellationToken);
-        }
+        var packageStack = modes.ResolveAutomaticInstallOrder([packageId]);
+        await queue.EnqueueAsync(
+            new ServerWorkItem(id, ServerWorkKind.InstallCs2Package, string.Join("\n", packageStack)),
+            cancellationToken);
 
         return Results.Accepted();
     }
@@ -196,8 +200,7 @@ public static class ServerEndpoints
         ServerOrchestrator orchestrator,
         CancellationToken cancellationToken)
     {
-        await orchestrator.SendCommandAsync(id, request.Command, cancellationToken);
-        return Results.NoContent();
+        return Results.Ok(await orchestrator.SendCommandAsync(id, request.Command, cancellationToken));
     }
 
     private static object ToResponse(

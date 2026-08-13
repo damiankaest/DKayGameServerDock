@@ -66,7 +66,8 @@ public sealed class Cs2ModeService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            server.ChangeStatus(ServerStatus.Error, clock.UtcNow, exception.Message);
+            // Managed mods are optional. Keep the base game startable when one package fails.
+            server.ChangeStatus(ServerStatus.Stopped, clock.UtcNow, exception.Message);
             await servers.SaveAsync(server, cancellationToken);
             await events.PublishStatusAsync(server.Id, ServerStatus.Error, cancellationToken);
             await events.RecordAsync(
