@@ -67,6 +67,12 @@ public sealed class Cs2ModeCatalogTests
         Assert.Equal("0", result["mp_friendlyfire"]);
         Assert.Equal("0", result["mp_teammates_are_enemies"]);
         Assert.Equal("0", result["mp_respawn_immunitytime"]);
+        Assert.Equal("1", result["mp_damage_scale_ct_head"]);
+        Assert.Equal("1", result["mp_damage_scale_ct_body"]);
+        Assert.Equal("1", result["mp_damage_scale_t_head"]);
+        Assert.Equal("1", result["mp_damage_scale_t_body"]);
+        Assert.Equal("0", result["mp_damage_headshot_only"]);
+        Assert.Equal("any", result["bot_join_team"]);
         Assert.Equal("1", result["mp_ignore_round_win_conditions"]);
         Assert.Equal("1", result["mp_autoteambalance"]);
         Assert.Equal("1", result["mp_limitteams"]);

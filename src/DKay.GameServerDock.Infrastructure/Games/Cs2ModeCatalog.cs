@@ -162,6 +162,12 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_teammates_are_enemies", "0", "Keep RPG Arena as team-versus-team combat."),
                 Fixed("mp_solid_teammates", "0", "Players do not block one another in tight arena corridors."),
                 Fixed("mp_respawn_immunitytime", "0", "No damage immunity remains after an arena respawn."),
+                Fixed("mp_damage_scale_ct_head", "1", "Counter-Terrorists receive normal head damage."),
+                Fixed("mp_damage_scale_ct_body", "1", "Counter-Terrorists receive normal body damage."),
+                Fixed("mp_damage_scale_t_head", "1", "Terrorists receive normal head damage."),
+                Fixed("mp_damage_scale_t_body", "1", "Terrorists receive normal body damage."),
+                Fixed("mp_damage_headshot_only", "0", "Both head and body hits deal damage."),
+                Fixed("bot_join_team", "any", "Distribute bots across both combat teams."),
                 Fixed("mp_ignore_round_win_conditions", "1", "Keep the arena running while players respawn."),
                 Fixed("mp_autoteambalance", "1", "Keep both RPG teams balanced."),
                 Fixed("mp_limitteams", "1", "Prevent one RPG team from becoming heavily stacked.")
