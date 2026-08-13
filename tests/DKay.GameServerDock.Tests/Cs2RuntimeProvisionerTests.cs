@@ -76,10 +76,14 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
-    public void Suppresses_cs2_console_input_polling_noise_only()
+    public void Suppresses_known_cs2_console_noise_without_hiding_native_plugin_failures()
     {
         Assert.False(ConsoleOutputPolicy.ShouldRecord("CTextConsoleWin::GetLine: !GetNumberOfConsoleInputEvents"));
+        Assert.False(ConsoleOutputPolicy.ShouldRecord(
+            @"Could not PreloadLibrary E:\server\game\csgo\addons\counterstrikesharp\api\System.Runtime.dll - Access violation at 00007FFA."));
         Assert.True(ConsoleOutputPolicy.ShouldRecord("Connection to Steam servers successful."));
+        Assert.True(ConsoleOutputPolicy.ShouldRecord(
+            @"[META] Failed to load plugin addons\cs2fixes-rampbugfix\bin\win64\cs2fixes-rampbugfix: procedure not found."));
     }
 
     [Fact]

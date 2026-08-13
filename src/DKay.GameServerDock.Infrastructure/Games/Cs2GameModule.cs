@@ -57,8 +57,10 @@ public sealed class Cs2GameModule(
         arguments.Add("dkay-bootstrap.cfg");
         if (!string.IsNullOrWhiteSpace(activeProfile?.WorkshopId))
         {
-            // Executing the request from a generated cfg makes CS2 process it after Source2 has
-            // entered its console loop. It also gives the live log an explicit, non-secret marker.
+            // A stock bootstrap map initializes Steam, networking and RCON before the UGC request.
+            // If Steam rejects the Workshop item, the process remains diagnosable instead of idle.
+            arguments.Add("+map");
+            arguments.Add(settings.Get("initialMap", "de_mirage"));
             runtime.WriteWorkshopLaunchConfiguration(server, activeProfile.WorkshopId);
             arguments.Add("+exec");
             arguments.Add("dkay-workshop-start.cfg");
