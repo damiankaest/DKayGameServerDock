@@ -159,7 +159,7 @@ public sealed class Cs2LiveControlServiceTests
             "sharptimer_enable_keys_hud" = "{keys}"
             "sharptimer_enable_velocity_hud" = "{velocity}"
             "sharptimer_enable_strafesync_hud" = "{velocity}"
-            "sharptimer_enable_rankicons_hud" = "{timer}"
+            "sharptimer_enable_rankicons_hud" = "{velocity}"
             "sharptimer_enable_map_tier_hud" = "{timer}"
             "sharptimer_enable_map_type_hud" = "{timer}"
             "sharptimer_enable_map_name_hud" = "{timer}"
