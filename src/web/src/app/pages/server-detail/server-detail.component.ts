@@ -65,6 +65,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly liveEditorView = signal<'recommended' | 'all'>('recommended');
   readonly liveQuery = signal('');
   readonly activeLiveGroup = signal('Round & match');
+  readonly activeActionGroup = signal('Round');
   readonly nextMapProfileId = signal('');
   readonly nextMapDelaySeconds = signal(60);
   readonly mapChangeAction = signal('');
@@ -284,11 +285,47 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   liveActionGroups(): string[] {
-    return [...new Set(this.liveControl()?.actions.map(action => action.group) ?? [])];
+    return [...new Set(this.utilityLiveActions().map(action => action.group))];
   }
 
   liveActionsFor(group: string): Cs2QuickAction[] {
-    return this.liveControl()?.actions.filter(action => action.group === group) ?? [];
+    return this.utilityLiveActions().filter(action => action.group === group);
+  }
+
+  combatActions(): Cs2QuickAction[] {
+    return this.liveControl()?.actions.filter(action => action.id.startsWith('combat-')) ?? [];
+  }
+
+  repairCombatAction(): Cs2QuickAction | null {
+    return this.liveControl()?.actions.find(action => action.id === 'repair-team-damage') ?? null;
+  }
+
+  selectActionGroup(group: string): void {
+    this.activeActionGroup.set(group);
+  }
+
+  activeCombatMode(): Cs2CombatMode {
+    const values = this.liveValues();
+    if (Number(values['mp_damage_scale_ct_body']) === 0 && Number(values['mp_damage_scale_t_body']) === 0) {
+      return 'peaceful';
+    }
+    if (Number(values['mp_teammates_are_enemies']) === 1) {
+      return 'ffa';
+    }
+    return this.activeModeProfile()?.combatMode ?? 'team';
+  }
+
+  combatModeForAction(actionId: string): Cs2CombatMode | null {
+    return ({
+      'combat-peaceful': 'peaceful',
+      'combat-team': 'team',
+      'combat-ffa': 'ffa'
+    } as Record<string, Cs2CombatMode>)[actionId] ?? null;
+  }
+
+  private utilityLiveActions(): Cs2QuickAction[] {
+    return this.liveControl()?.actions.filter(action =>
+      !action.id.startsWith('combat-') && action.id !== 'repair-team-damage') ?? [];
   }
 
   updateLiveValue(key: string, event: Event): void {
@@ -737,7 +774,9 @@ export class ServerDetailComponent implements OnDestroy {
     this.liveAction.set(actionId);
     this.api.runCs2Action(this.id, actionId, value).pipe(finalize(() => this.liveAction.set(''))).subscribe({
       next: result => {
-        const message = `${label} executed successfully.`;
+        const message = (actionId.startsWith('combat-') || actionId === 'repair-team-damage') && result.output
+          ? result.output
+          : `${label} executed successfully.`;
         this.liveMessage.set(message);
         this.reflectCombatAction(actionId);
         this.appendConsoleMessage(`> ${label} (${result.transport})`, 'ConsoleCommand');
