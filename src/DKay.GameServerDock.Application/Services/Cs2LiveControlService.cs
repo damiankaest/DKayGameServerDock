@@ -24,9 +24,9 @@ public sealed partial class Cs2LiveControlService(
         new("resume-match", "Resume match", "Continue a previously paused match.", "Round", "▷"),
         new("swap-teams", "Swap teams", "Move Terrorists and Counter-Terrorists to the opposite side.", "Teams", "⇄"),
         new("scramble-teams", "Scramble teams", "Redistribute the current players across both teams.", "Teams", "⤨"),
-        new("combat-peaceful", "Peaceful", "Disable player damage while keeping weapons and movement available.", "Teams", "☮"),
-        new("combat-team", "CT vs T", "Enable normal team combat: opponents take damage and teammates are protected.", "Teams", "VS", "primary"),
-        new("combat-ffa", "Free for all", "Treat every other player as an enemy, regardless of their assigned team.", "Teams", "FFA", "danger"),
+        new("combat-peaceful", "Peaceful", "Weapons stay available, but nobody can deal player damage.", "Teams", "☮"),
+        new("combat-team", "CT vs T", "Opponents take normal damage while teammates remain protected.", "Teams", "VS"),
+        new("combat-ffa", "Free for all", "Every other player is an enemy, independent of the assigned team.", "Teams", "FFA"),
         new("repair-team-damage", "Reapply combat profile", "Restore the selected peaceful, team or FFA policy after a plugin or map changed it.", "Teams", "HP", "primary"),
         new("add-bot-ct", "Add CT bot", "Disable team limits and add exactly one CT bot.", "Bots", "+CT"),
         new("add-bot-t", "Add T bot", "Disable team limits and add exactly one T bot.", "Bots", "+T"),
@@ -49,10 +49,6 @@ public sealed partial class Cs2LiveControlService(
             ["resume-match"] = "mp_unpause_match",
             ["swap-teams"] = "mp_swapteams",
             ["scramble-teams"] = "mp_scrambleteams",
-            ["combat-peaceful"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
-            ["combat-team"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
-            ["combat-ffa"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
-            ["repair-team-damage"] = "exec dkay-combat.cfg; exec dkay-live.cfg; mp_restartgame 1",
             ["add-bot-ct"] = "mp_autoteambalance 0; mp_limitteams 0; bot_quota_mode normal; bot_add_ct",
             ["add-bot-t"] = "mp_autoteambalance 0; mp_limitteams 0; bot_quota_mode normal; bot_add_t",
             ["kill-bots"] = "sv_cheats 1; bot_kill",
@@ -182,16 +178,21 @@ public sealed partial class Cs2LiveControlService(
             throw new InvalidOperationException("Start the CS2 server before using live controls.");
         }
 
-        var command = request.ActionId switch
-        {
-            "change-map" => BuildChangeMapCommand(request.Value),
-            _ when ActionCommands.TryGetValue(request.ActionId, out var knownCommand) => knownCommand,
-            _ => throw new InvalidOperationException($"Unknown CS2 quick action '{request.ActionId}'.")
-        };
         var combatMode = ResolveCombatModeAction(request.ActionId);
+        if (request.ActionId == "repair-team-damage")
+        {
+            var savedState = await modes.GetStateAsync(server, cancellationToken);
+            combatMode = savedState.Profiles.FirstOrDefault(profile =>
+                string.Equals(profile.Id, savedState.ActiveProfileId, StringComparison.Ordinal))?.CombatMode
+                ?? throw new InvalidOperationException("Select and activate a map profile before reapplying its combat mode.");
+        }
+        var sharpTimerInstalled = false;
         if (combatMode is not null)
         {
             await modes.SetActiveCombatModeAsync(server, combatMode, cancellationToken);
+            var modeState = await modes.GetStateAsync(server, cancellationToken);
+            sharpTimerInstalled = modeState.Packages.Any(package =>
+                string.Equals(package.Id, "sharp-timer", StringComparison.Ordinal) && package.Installed);
             var persistentValues = store.ReadLiveSettings(server).ToDictionary(
                 pair => pair.Key,
                 pair => pair.Value,
@@ -203,6 +204,14 @@ public sealed partial class Cs2LiveControlService(
 
             store.SaveLiveSettings(server, persistentValues);
         }
+
+        var command = request.ActionId switch
+        {
+            "change-map" => BuildChangeMapCommand(request.Value),
+            _ when combatMode is not null => BuildCombatApplyCommand(combatMode, sharpTimerInstalled),
+            _ when ActionCommands.TryGetValue(request.ActionId, out var knownCommand) => knownCommand,
+            _ => throw new InvalidOperationException($"Unknown CS2 quick action '{request.ActionId}'.")
+        };
 
         if (request.ActionId is "kill-bots" or "freeze-bots" or "release-bots" or "enable-bhop" or "disable-bhop")
         {
@@ -238,6 +247,30 @@ public sealed partial class Cs2LiveControlService(
             processes,
             adapter.NormalizeConsoleCommand(command),
             cancellationToken);
+        if (combatMode is not null)
+        {
+            var verificationCommand = BuildCombatVerificationCommand(sharpTimerInstalled);
+            var verification = await adapter.ExecuteConsoleCommandAsync(
+                server,
+                processes,
+                adapter.NormalizeConsoleCommand(verificationCommand),
+                cancellationToken);
+            var failures = FindCombatVerificationFailures(
+                BuildCombatLiveValues(combatMode),
+                sharpTimerInstalled ? (combatMode == "peaceful" ? "1" : "0") : null,
+                verification.Output);
+            if (failures.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"CS2 accepted the combat action, but live verification failed for {string.Join(", ", failures)}. " +
+                    "The saved profile remains intact; use Reapply combat profile or inspect the Console for a plugin override.");
+            }
+
+            result = result with
+            {
+                Output = $"Live combat mode '{combatMode}' applied and verified without restarting the round."
+            };
+        }
         await events.RecordAsync(
             ServerEvent.Create(
                 server.Id,
@@ -279,6 +312,65 @@ public sealed partial class Cs2LiveControlService(
             ["mp_damage_scale_t_body"] = damageScale,
             ["mp_damage_headshot_only"] = "0"
         };
+    }
+
+    internal static string BuildCombatApplyCommand(string combatMode, bool sharpTimerInstalled)
+    {
+        var commands = BuildCombatLiveValues(combatMode)
+            .Select(pair => $"{pair.Key} {pair.Value}")
+            .ToList();
+        if (sharpTimerInstalled)
+        {
+            commands.Add($"sharptimer_remove_damage {(combatMode == "peaceful" ? "1" : "0")}");
+        }
+
+        return string.Join("; ", commands);
+    }
+
+    internal static string BuildCombatVerificationCommand(bool sharpTimerInstalled)
+    {
+        var keys = BuildCombatLiveValues("team").Keys.ToList();
+        if (sharpTimerInstalled)
+        {
+            keys.Add("sharptimer_remove_damage");
+        }
+
+        return string.Join("; ", keys);
+    }
+
+    internal static IReadOnlyList<string> FindCombatVerificationFailures(
+        IReadOnlyDictionary<string, string> expectedValues,
+        string? expectedSharpTimerRemoveDamage,
+        string? output)
+    {
+        var failures = expectedValues
+            .Where(pair => !TryReadConsoleVariable(pair.Key, output, out var reported) ||
+                           !ConsoleValuesMatch(pair.Value, reported))
+            .Select(pair => pair.Key)
+            .ToList();
+        if (expectedSharpTimerRemoveDamage is not null &&
+            (!TryReadConsoleVariable("sharptimer_remove_damage", output, out var sharpTimerValue) ||
+             !ConsoleValuesMatch(expectedSharpTimerRemoveDamage, sharpTimerValue)))
+        {
+            failures.Add("sharptimer_remove_damage");
+        }
+
+        return failures;
+    }
+
+    private static bool ConsoleValuesMatch(string expected, string reported)
+    {
+        reported = reported.Trim().Trim('"');
+        reported = reported.ToLowerInvariant() switch
+        {
+            "true" => "1",
+            "false" => "0",
+            _ => reported
+        };
+        return decimal.TryParse(expected, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var expectedNumber) &&
+               decimal.TryParse(reported, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var reportedNumber)
+            ? expectedNumber == reportedNumber
+            : string.Equals(expected, reported, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<Cs2MapChangeState> GetMapChangeStateAsync(

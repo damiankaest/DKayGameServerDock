@@ -241,23 +241,49 @@
         @if (liveLoading() && !liveControl()) {
           <div class="skeleton-block tall full"></div>
         } @else if (liveControl(); as control) {
+          <section class="panel full live-combat-panel">
+            <header>
+              <div><p class="eyebrow">LIVE COMBAT</p><h2>Who can damage whom?</h2><p>Switch the active rule immediately. The Hub verifies CS2 and SharpTimer before showing success.</p></div>
+              <span class="live-mode-badge">{{ activeCombatMode() === 'peaceful' ? 'PEACEFUL' : activeCombatMode() === 'ffa' ? 'FREE FOR ALL' : 'CT VS T' }}</span>
+            </header>
+            <div class="combat-mode-selector" role="group" aria-label="Live combat mode">
+              @for (action of combatActions(); track action.id) {
+                <button type="button"
+                  [class.selected]="activeCombatMode() === combatModeForAction(action.id)"
+                  [class.loading]="liveAction() === action.id"
+                  [disabled]="!control.running || liveAction() !== ''"
+                  (click)="runLiveAction(action)">
+                  <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
+                  <div><strong>{{ action.label }}</strong><small>{{ action.description }}</small></div>
+                  @if (activeCombatMode() === combatModeForAction(action.id)) { <b>ACTIVE</b> }
+                </button>
+              }
+            </div>
+            <footer>
+              <span>Applies during the current round and stays active after map changes.</span>
+              @if (repairCombatAction(); as repair) {
+                <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Reapplying…' : '↻ Reapply current mode' }}</button>
+              }
+            </footer>
+          </section>
+
           <section class="panel full live-actions-panel">
-            <header><div><p class="eyebrow">ONE-CLICK ACTIONS</p><h2>Match and practice controls</h2></div><small>{{ control.actions.length }} safe actions</small></header>
-            <div class="live-action-groups">
+            <header><div><p class="eyebrow">QUICK ACTIONS</p><h2>Match tools</h2></div><small>Choose a category, then an action</small></header>
+            <nav class="live-action-tabs" aria-label="Quick action categories">
               @for (group of liveActionGroups(); track group) {
-                <div class="live-action-group">
-                  <h3>{{ group }}</h3>
-                  <div class="live-action-grid">
-                    @for (action of liveActionsFor(group); track action.id) {
-                      <button type="button" [class.primary]="action.tone === 'primary'" [class.danger]="action.tone === 'danger'" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
-                        <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
-                        <strong>{{ action.label }}</strong>
-                        <small>{{ action.description }}</small>
-                        @if (action.requiresPlugin) { <em>PLUGIN</em> }
-                      </button>
-                    }
-                  </div>
-                </div>
+                <button type="button" [class.active]="activeActionGroup() === group" (click)="selectActionGroup(group)">
+                  <span>{{ group === 'Round' ? '◷' : group === 'Teams' ? 'VS' : group === 'Bots' ? 'BOT' : group === 'Movement' ? '↗' : 'MAP' }}</span>
+                  {{ group }}
+                </button>
+              }
+            </nav>
+            <div class="live-action-grid compact">
+              @for (action of liveActionsFor(activeActionGroup()); track action.id) {
+                <button type="button" [class.primary]="action.tone === 'primary'" [class.danger]="action.tone === 'danger'" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                  <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
+                  <div><strong>{{ action.label }}</strong><small>{{ action.description }}</small></div>
+                  @if (action.requiresPlugin) { <em>PLUGIN</em> }
+                </button>
               }
             </div>
             @if (!control.running) { <p class="readiness-note">Start the server to enable live actions. Configuration and Steam identity can still be prepared while it is stopped.</p> }

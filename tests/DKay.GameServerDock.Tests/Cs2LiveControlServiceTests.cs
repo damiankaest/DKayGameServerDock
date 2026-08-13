@@ -74,4 +74,61 @@ public sealed class Cs2LiveControlServiceTests
         Assert.Equal(damageScale, values["mp_damage_scale_t_head"]);
         Assert.Equal("0", values["mp_damage_headshot_only"]);
     }
+
+    [Fact]
+    public void Live_combat_command_sets_engine_and_sharptimer_values_directly_without_restarting()
+    {
+        var command = Cs2LiveControlService.BuildCombatApplyCommand("team", sharpTimerInstalled: true);
+
+        Assert.Contains("mp_friendlyfire 0", command);
+        Assert.Contains("mp_teammates_are_enemies 0", command);
+        Assert.Contains("mp_damage_scale_t_body 1", command);
+        Assert.Contains("sharptimer_remove_damage 0", command);
+        Assert.DoesNotContain("exec ", command);
+        Assert.DoesNotContain("mp_restartgame", command);
+    }
+
+    [Fact]
+    public void Live_combat_verification_accepts_boolean_and_decimal_console_formats()
+    {
+        const string output = """
+            "mp_friendlyfire" = "false"
+            "mp_teammates_are_enemies" = "0"
+            "mp_damage_scale_ct_head" = "1.000000"
+            "mp_damage_scale_ct_body" = "1"
+            "mp_damage_scale_t_head" = "1.0"
+            "mp_damage_scale_t_body" = "1"
+            "mp_damage_headshot_only" = "false"
+            "sharptimer_remove_damage" = "false"
+            """;
+
+        var failures = Cs2LiveControlService.FindCombatVerificationFailures(
+            Cs2LiveControlService.BuildCombatLiveValues("team"),
+            "0",
+            output);
+
+        Assert.Empty(failures);
+    }
+
+    [Fact]
+    public void Live_combat_verification_reports_values_overridden_by_a_plugin()
+    {
+        const string output = """
+            "mp_friendlyfire" = "0"
+            "mp_teammates_are_enemies" = "0"
+            "mp_damage_scale_ct_head" = "1"
+            "mp_damage_scale_ct_body" = "1"
+            "mp_damage_scale_t_head" = "1"
+            "mp_damage_scale_t_body" = "1"
+            "mp_damage_headshot_only" = "0"
+            "sharptimer_remove_damage" = "true"
+            """;
+
+        var failures = Cs2LiveControlService.FindCombatVerificationFailures(
+            Cs2LiveControlService.BuildCombatLiveValues("team"),
+            "0",
+            output);
+
+        Assert.Equal("sharptimer_remove_damage", Assert.Single(failures));
+    }
 }
