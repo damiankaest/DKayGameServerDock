@@ -174,6 +174,16 @@
                   </select>
                   <small>Controls SharpTimer's center display per map. Combat and RPG presets default to a clean screen; Surf, KZ and Bhop keep movement details.</small>
                 </label>
+                <label class="mode-policy-field">After a player dies
+                  <select [value]="modeRespawn()" (change)="updateModeRespawn($event)">
+                    <option value="round">Wait for next round</option>
+                    <option value="instant">Always respawn immediately</option>
+                  </select>
+                  <small>
+                    @if (modeRespawn() === 'round') { Death matters: eliminated players wait until the round has been decided. }
+                    @else { Arena flow: players return immediately and normal round win conditions stay disabled. }
+                  </small>
+                </label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {
@@ -265,6 +275,46 @@
                 <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Reapplying…' : '↻ Reapply current mode' }}</button>
               }
             </footer>
+          </section>
+
+          <section class="panel full live-policy-panel">
+            <header>
+              <div><p class="eyebrow">LIVE GAMEPLAY</p><h2>Movement, respawn and screen</h2><p>These switches show the values currently reported by CS2 and SharpTimer—not just the selected preset.</p></div>
+              <button class="ghost-button small" type="button" [disabled]="liveLoading() || liveAction() !== ''" (click)="loadCs2Control()">↻ Read actual state</button>
+            </header>
+            <div class="live-policy-grid">
+              <article>
+                <div class="live-policy-heading"><span>↗</span><div><strong>Automatic bunnyhop</strong><small>Hold jump to hop continuously.</small></div><b [class.warning]="activeBhopMode() === 'mixed'">{{ activeBhopMode() === 'enabled' ? 'ON' : activeBhopMode() === 'disabled' ? 'OFF' : 'MIXED' }}</b></div>
+                <div class="live-policy-options" role="group" aria-label="Automatic bunnyhop">
+                  @for (action of policyActions('bhop'); track action.id) {
+                    <button type="button" [class.selected]="isPolicyActionActive(action.id)" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                      <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                    </button>
+                  }
+                </div>
+              </article>
+              <article>
+                <div class="live-policy-heading"><span>∞</span><div><strong>Death & round flow</strong><small>Choose whether elimination matters.</small></div><b [class.warning]="activeRespawnMode() === 'mixed'">{{ activeRespawnMode() === 'instant' ? 'INSTANT' : activeRespawnMode() === 'round' ? 'ROUND' : 'MIXED' }}</b></div>
+                <div class="live-policy-options" role="group" aria-label="Respawn behavior">
+                  @for (action of policyActions('respawn'); track action.id) {
+                    <button type="button" [class.selected]="isPolicyActionActive(action.id)" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                      <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                    </button>
+                  }
+                </div>
+              </article>
+              <article>
+                <div class="live-policy-heading"><span>HUD</span><div><strong>SharpTimer display</strong><small>Hide keys and speed outside movement modes.</small></div><b>{{ activeHudMode() === 'hidden' ? 'CLEAN' : activeHudMode() === 'timer' ? 'TIMER' : 'MOVEMENT' }}</b></div>
+                <div class="live-policy-options three" role="group" aria-label="SharpTimer HUD">
+                  @for (action of policyActions('hud'); track action.id) {
+                    <button type="button" [class.selected]="isPolicyActionActive(action.id)" [disabled]="!control.running || !control.sharpTimerInstalled || liveAction() !== ''" (click)="runLiveAction(action)">
+                      <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                    </button>
+                  }
+                </div>
+                @if (!control.sharpTimerInstalled) { <small class="live-policy-note">Install SharpTimer under Modes & maps to enable this display.</small> }
+              </article>
+            </div>
           </section>
 
           <section class="panel full live-actions-panel">

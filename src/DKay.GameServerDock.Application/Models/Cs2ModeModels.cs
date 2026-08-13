@@ -22,7 +22,8 @@ public sealed record Cs2ModePresetDescriptor(
     IReadOnlyList<Cs2ConVarDescriptor> Settings,
     string DefaultCombatMode,
     string DefaultAmmoMode,
-    string DefaultHudMode);
+    string DefaultHudMode,
+    string DefaultRespawnMode);
 
 public sealed record Cs2ManagedPackageDescriptor(
     string Id,
@@ -45,7 +46,8 @@ public sealed record ApplyCs2ModePresetRequest(
     IReadOnlyDictionary<string, string> Overrides,
     string? CombatMode = null,
     string? AmmoMode = null,
-    string? HudMode = null);
+    string? HudMode = null,
+    string? RespawnMode = null);
 
 public sealed record Cs2ModeProfile(
     string Id,
@@ -63,7 +65,8 @@ public sealed record Cs2ModeProfile(
     DateTimeOffset UpdatedAt,
     string? CombatMode = null,
     string? AmmoMode = null,
-    string? HudMode = null);
+    string? HudMode = null,
+    string? RespawnMode = null);
 
 public sealed record Cs2WorkshopAccessState(
     bool Configured,

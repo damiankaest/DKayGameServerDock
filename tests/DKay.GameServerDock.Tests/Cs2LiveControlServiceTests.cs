@@ -131,4 +131,43 @@ public sealed class Cs2LiveControlServiceTests
 
         Assert.Equal("sharptimer_remove_damage", Assert.Single(failures));
     }
+
+    [Theory]
+    [InlineData("round", "0")]
+    [InlineData("instant", "1")]
+    public void Respawn_actions_keep_both_teams_and_round_rules_consistent(string mode, string expected)
+    {
+        var values = Cs2LiveControlService.BuildRespawnLiveValues(mode);
+
+        Assert.Equal(expected, values["mp_respawn_on_death_t"]);
+        Assert.Equal(expected, values["mp_respawn_on_death_ct"]);
+        Assert.Equal(expected, values["mp_ignore_round_win_conditions"]);
+    }
+
+    [Theory]
+    [InlineData("0", "0", "0", "hidden")]
+    [InlineData("1", "0", "0", "timer")]
+    [InlineData("1", "1", "1", "movement")]
+    public void Sharptimer_hud_status_is_derived_from_reported_plugin_values(
+        string timer,
+        string keys,
+        string velocity,
+        string expected)
+    {
+        var output = $"""
+            "sharptimer_enable_timer_hud" = "{timer}"
+            "sharptimer_enable_keys_hud" = "{keys}"
+            "sharptimer_enable_velocity_hud" = "{velocity}"
+            "sharptimer_enable_strafesync_hud" = "{velocity}"
+            "sharptimer_enable_rankicons_hud" = "{timer}"
+            "sharptimer_enable_map_tier_hud" = "{timer}"
+            "sharptimer_enable_map_type_hud" = "{timer}"
+            "sharptimer_enable_map_name_hud" = "{timer}"
+            """;
+
+        var resolved = Cs2LiveControlService.TryResolveReportedHudMode(output, out var hudMode);
+
+        Assert.True(resolved);
+        Assert.Equal(expected, hudMode);
+    }
 }

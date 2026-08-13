@@ -35,7 +35,9 @@ public sealed record Cs2LiveControlState(
     IReadOnlyDictionary<string, string> Values,
     IReadOnlyList<Cs2QuickActionDescriptor> Actions,
     Cs2GsltState Gslt,
-    Cs2MapChangeState MapChange);
+    Cs2MapChangeState MapChange,
+    string ActiveHudMode,
+    bool SharpTimerInstalled);
 
 public sealed record Cs2MapChangeState(
     string Status,

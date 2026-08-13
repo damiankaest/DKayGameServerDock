@@ -9,6 +9,7 @@ public static partial class Cs2ModeCatalog
     public static IReadOnlyList<string> CombatModes { get; } = ["peaceful", "team", "ffa"];
     public static IReadOnlyList<string> AmmoModes { get; } = ["standard", "infinite-magazine", "infinite-reserve"];
     public static IReadOnlyList<string> HudModes { get; } = ["hidden", "timer", "movement"];
+    public static IReadOnlyList<string> RespawnModes { get; } = ["round", "instant"];
 
     public static IReadOnlyList<Cs2ModePresetDescriptor> Presets { get; } =
     [
@@ -37,7 +38,8 @@ public static partial class Cs2ModeCatalog
             ],
             "team",
             "standard",
-            "hidden"),
+            "hidden",
+            "round"),
         new(
             "surf",
             "Surf",
@@ -67,7 +69,8 @@ public static partial class Cs2ModeCatalog
             ],
             "peaceful",
             "standard",
-            "movement"),
+            "movement",
+            "instant"),
         new(
             "kz",
             "KZ / Climb",
@@ -97,7 +100,8 @@ public static partial class Cs2ModeCatalog
             ],
             "peaceful",
             "standard",
-            "movement"),
+            "movement",
+            "instant"),
         new(
             "bhop",
             "Bunny Hop",
@@ -127,7 +131,8 @@ public static partial class Cs2ModeCatalog
             ],
             "peaceful",
             "standard",
-            "movement"),
+            "movement",
+            "instant"),
         new(
             "scoutzknivez",
             "ScoutzKnivez",
@@ -139,8 +144,6 @@ public static partial class Cs2ModeCatalog
             [
                 Integer("sv_gravity", "Gravity", "220", 100, 800, "Classic low-gravity feel."),
                 Integer("sv_airaccelerate", "Air acceleration", "100", 10, 2000, "Mid-air control."),
-                Boolean("mp_respawn_on_death_t", "T respawn", "1", "Respawn Terrorists after death."),
-                Boolean("mp_respawn_on_death_ct", "CT respawn", "1", "Respawn Counter-Terrorists after death."),
                 Fixed("mp_buytime", "0", "Buying disabled."),
                 Fixed("mp_buy_anywhere", "0", "Buying disabled everywhere."),
                 Fixed("mp_maxmoney", "0", "No economy."),
@@ -159,7 +162,8 @@ public static partial class Cs2ModeCatalog
             ],
             "team",
             "standard",
-            "hidden"),
+            "hidden",
+            "instant"),
         new(
             "rpg-arena",
             "RPG Arena",
@@ -170,8 +174,6 @@ public static partial class Cs2ModeCatalog
             ["metamod-source", "counterstrikesharp", "warcraft-rpg"],
             [
                 Integer("mp_roundtime", "Round time", "30", 1, 60, "Long arena rounds."),
-                Boolean("mp_respawn_on_death_t", "T respawn", "1", "Respawn Terrorists after death."),
-                Boolean("mp_respawn_on_death_ct", "CT respawn", "1", "Respawn Counter-Terrorists after death."),
                 Integer("mp_respawnwavetime_t", "T respawn delay", "2", 0, 30, "Respawn delay in seconds."),
                 Integer("mp_respawnwavetime_ct", "CT respawn delay", "2", 0, 30, "Respawn delay in seconds."),
                 Fixed("mp_freezetime", "0", "No freeze time."),
@@ -193,7 +195,8 @@ public static partial class Cs2ModeCatalog
             ],
             "team",
             "standard",
-            "hidden")
+            "hidden",
+            "instant")
     ];
 
     public static IReadOnlyList<Cs2ManagedPackageDescriptor> Packages { get; } =
@@ -259,6 +262,13 @@ public static partial class Cs2ModeCatalog
             result[key] = value;
         }
 
+        foreach (var (key, value) in BuildRespawnConVars(ResolveRespawnMode(preset, request.RespawnMode)))
+        {
+            // Respawn is a first-class per-map policy. It intentionally wins over historic
+            // preset defaults so an arena can be played either continuously or round-based.
+            result[key] = value;
+        }
+
         return result;
     }
 
@@ -284,6 +294,30 @@ public static partial class Cs2ModeCatalog
         return HudModes.Contains(candidate, StringComparer.Ordinal)
             ? candidate
             : throw new ArgumentException("SharpTimer HUD mode must be hidden, timer or movement.");
+    }
+
+    public static string ResolveRespawnMode(Cs2ModePresetDescriptor preset, string? value)
+    {
+        var candidate = string.IsNullOrWhiteSpace(value) ? preset.DefaultRespawnMode : value.Trim().ToLowerInvariant();
+        return RespawnModes.Contains(candidate, StringComparer.Ordinal)
+            ? candidate
+            : throw new ArgumentException("Respawn mode must be round or instant.");
+    }
+
+    public static IReadOnlyDictionary<string, string> BuildRespawnConVars(string respawnMode)
+    {
+        if (!RespawnModes.Contains(respawnMode, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("Respawn mode must be round or instant.");
+        }
+
+        var instant = respawnMode == "instant" ? "1" : "0";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mp_respawn_on_death_t"] = instant,
+            ["mp_respawn_on_death_ct"] = instant,
+            ["mp_ignore_round_win_conditions"] = instant
+        };
     }
 
     public static IReadOnlyDictionary<string, string> BuildCombatConVars(string combatMode, string ammoMode)

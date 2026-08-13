@@ -157,6 +157,32 @@ public sealed class Cs2ModeCatalogTests
         Assert.Equal(movementDetailsVisible, commands["sharptimer_enable_keys_hud"]);
     }
 
+    [Theory]
+    [InlineData("round", "0")]
+    [InlineData("instant", "1")]
+    public void Respawn_policy_overrides_historic_preset_values(string respawnMode, string expected)
+    {
+        var preset = Cs2ModeCatalog.Presets.Single(item => item.Id == "rpg-arena");
+        var result = Cs2ModeCatalog.BuildConVars(
+            preset,
+            new ApplyCs2ModePresetRequest(
+                preset.Id,
+                "fy_pool_day",
+                null,
+                0,
+                1,
+                false,
+                new Dictionary<string, string>(),
+                "team",
+                "standard",
+                "hidden",
+                respawnMode));
+
+        Assert.Equal(expected, result["mp_respawn_on_death_t"]);
+        Assert.Equal(expected, result["mp_respawn_on_death_ct"]);
+        Assert.Equal(expected, result["mp_ignore_round_win_conditions"]);
+    }
+
     [Fact]
     public async Task Active_combat_policy_is_reapplied_after_sharptimer_without_overwriting_custom_config()
     {
@@ -251,6 +277,43 @@ public sealed class Cs2ModeCatalogTests
             Assert.Contains("mp_friendlyfire 1", profileConfig);
             Assert.Contains("mp_teammates_are_enemies 1", profileConfig);
             Assert.Contains("mp_damage_scale_t_body 1", combatConfig);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Respawn_and_hud_policies_can_be_changed_and_persisted_live()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-live-policy-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            using var httpClient = new HttpClient();
+            var manager = new Cs2ModeManager(httpClient);
+            await manager.ApplyPresetAsync(
+                server,
+                new ApplyCs2ModePresetRequest(
+                    "rpg-arena",
+                    "fy_pool_day",
+                    null,
+                    0,
+                    1,
+                    false,
+                    new Dictionary<string, string>()),
+                CancellationToken.None);
+
+            await manager.SetActiveRespawnModeAsync(server, "round", CancellationToken.None);
+            await manager.SetActiveHudModeAsync(server, "timer", CancellationToken.None);
+            var profile = Assert.Single((await manager.GetStateAsync(server, CancellationToken.None)).Profiles);
+
+            Assert.Equal("round", profile.RespawnMode);
+            Assert.Equal("timer", profile.HudMode);
+            var profileConfig = await File.ReadAllTextAsync(Path.Combine(root, "game", "csgo", "cfg", "dkay", "maps", "fy_pool_day.cfg"));
+            Assert.Contains("mp_respawn_on_death_t 0", profileConfig);
+            Assert.Contains("mp_ignore_round_win_conditions 0", profileConfig);
         }
         finally
         {

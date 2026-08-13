@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
+import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2RespawnMode, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -42,6 +42,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly modeCombat = signal<Cs2CombatMode>('team');
   readonly modeAmmo = signal<Cs2AmmoMode>('standard');
   readonly modeHud = signal<Cs2HudMode>('hidden');
+  readonly modeRespawn = signal<Cs2RespawnMode>('round');
   readonly modeInstallPackages = signal(true);
   readonly modeOverrides = signal<Record<string, string>>({});
   readonly modeSaving = signal(false);
@@ -296,6 +297,39 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.actions.filter(action => action.id.startsWith('combat-')) ?? [];
   }
 
+  policyActions(policy: 'bhop' | 'respawn' | 'hud'): Cs2QuickAction[] {
+    const ids = policy === 'bhop' ? ['enable-bhop', 'disable-bhop']
+      : policy === 'respawn' ? ['respawn-round', 'respawn-instant']
+      : ['hud-hidden', 'hud-timer', 'hud-movement'];
+    return this.liveControl()?.actions.filter(action => ids.includes(action.id)) ?? [];
+  }
+
+  activeBhopMode(): 'enabled' | 'disabled' | 'mixed' {
+    const enabled = this.liveValues()['sv_enablebunnyhopping'] === '1';
+    const automatic = this.liveValues()['sv_autobunnyhopping'] === '1';
+    return enabled && automatic ? 'enabled' : !enabled && !automatic ? 'disabled' : 'mixed';
+  }
+
+  activeRespawnMode(): Cs2RespawnMode | 'mixed' {
+    const values = this.liveValues();
+    const t = values['mp_respawn_on_death_t'] === '1';
+    const ct = values['mp_respawn_on_death_ct'] === '1';
+    const endless = values['mp_ignore_round_win_conditions'] === '1';
+    return t && ct && endless ? 'instant' : !t && !ct && !endless ? 'round' : 'mixed';
+  }
+
+  activeHudMode(): Cs2HudMode {
+    return this.liveControl()?.activeHudMode ?? this.activeModeProfile()?.hudMode ?? 'hidden';
+  }
+
+  isPolicyActionActive(actionId: string): boolean {
+    return actionId === 'enable-bhop' ? this.activeBhopMode() === 'enabled'
+      : actionId === 'disable-bhop' ? this.activeBhopMode() === 'disabled'
+      : actionId === 'respawn-round' ? this.activeRespawnMode() === 'round'
+      : actionId === 'respawn-instant' ? this.activeRespawnMode() === 'instant'
+      : actionId === `hud-${this.activeHudMode()}`;
+  }
+
   repairCombatAction(): Cs2QuickAction | null {
     return this.liveControl()?.actions.find(action => action.id === 'repair-team-damage') ?? null;
   }
@@ -325,7 +359,9 @@ export class ServerDetailComponent implements OnDestroy {
 
   private utilityLiveActions(): Cs2QuickAction[] {
     return this.liveControl()?.actions.filter(action =>
-      !action.id.startsWith('combat-') && action.id !== 'repair-team-damage') ?? [];
+      !action.id.startsWith('combat-') &&
+      action.id !== 'repair-team-damage' &&
+      !['enable-bhop', 'disable-bhop', 'respawn-round', 'respawn-instant', 'hud-hidden', 'hud-timer', 'hud-movement'].includes(action.id)) ?? [];
   }
 
   updateLiveValue(key: string, event: Event): void {
@@ -455,6 +491,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeCombat.set(preset.defaultCombatMode);
     this.modeAmmo.set(preset.defaultAmmoMode);
     this.modeHud.set(preset.defaultHudMode);
+    this.modeRespawn.set(preset.defaultRespawnMode);
     this.modeOverrides.set(Object.fromEntries(
       preset.settings.filter(setting => setting.editable).map(setting => [setting.key, setting.defaultValue])
     ));
@@ -469,6 +506,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeCombat.set(profile.combatMode);
     this.modeAmmo.set(profile.ammoMode);
     this.modeHud.set(profile.hudMode);
+    this.modeRespawn.set(profile.respawnMode);
     this.modeOverrides.update(values => ({ ...values, ...profile.overrides }));
   }
 
@@ -498,6 +536,10 @@ export class ServerDetailComponent implements OnDestroy {
 
   updateModeHud(event: Event): void {
     this.modeHud.set((event.target as HTMLSelectElement).value as Cs2HudMode);
+  }
+
+  updateModeRespawn(event: Event): void {
+    this.modeRespawn.set((event.target as HTMLSelectElement).value as Cs2RespawnMode);
   }
 
   updateWorkshopQuery(event: Event): void {
@@ -580,7 +622,8 @@ export class ServerDetailComponent implements OnDestroy {
       overrides: this.modeOverrides(),
       combatMode: this.modeCombat(),
       ammoMode: this.modeAmmo(),
-      hudMode: this.modeHud()
+      hudMode: this.modeHud(),
+      respawnMode: this.modeRespawn()
     }).pipe(finalize(() => {
       this.modeSaving.set(false);
       this.workshopAdding.set('');
@@ -774,11 +817,15 @@ export class ServerDetailComponent implements OnDestroy {
     this.liveAction.set(actionId);
     this.api.runCs2Action(this.id, actionId, value).pipe(finalize(() => this.liveAction.set(''))).subscribe({
       next: result => {
-        const message = (actionId.startsWith('combat-') || actionId === 'repair-team-damage') && result.output
-          ? result.output
-          : `${label} executed successfully.`;
+        const verifiedPolicy = actionId.startsWith('combat-') ||
+          actionId === 'repair-team-damage' ||
+          actionId.startsWith('respawn-') ||
+          actionId.startsWith('hud-') ||
+          actionId === 'enable-bhop' ||
+          actionId === 'disable-bhop';
+        const message = verifiedPolicy && result.output ? result.output : `${label} executed successfully.`;
         this.liveMessage.set(message);
-        this.reflectCombatAction(actionId);
+        this.reflectLiveAction(actionId);
         this.appendConsoleMessage(`> ${label} (${result.transport})`, 'ConsoleCommand');
         if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
       },
@@ -786,29 +833,63 @@ export class ServerDetailComponent implements OnDestroy {
     });
   }
 
-  private reflectCombatAction(actionId: string): void {
+  private reflectLiveAction(actionId: string): void {
     const combatMode = ({
       'combat-peaceful': 'peaceful',
       'combat-team': 'team',
       'combat-ffa': 'ffa'
     } as const)[actionId as 'combat-peaceful' | 'combat-team' | 'combat-ffa'];
-    if (!combatMode) return;
+    if (combatMode) {
+      const damageScale = combatMode === 'peaceful' ? '0' : '1';
+      this.liveValues.update(values => ({
+        ...values,
+        mp_friendlyfire: combatMode === 'ffa' ? '1' : '0',
+        mp_teammates_are_enemies: combatMode === 'ffa' ? '1' : '0',
+        mp_damage_scale_ct_head: damageScale,
+        mp_damage_scale_ct_body: damageScale,
+        mp_damage_scale_t_head: damageScale,
+        mp_damage_scale_t_body: damageScale,
+        mp_damage_headshot_only: '0'
+      }));
+      this.updateActiveProfilePolicy({ combatMode });
+      return;
+    }
 
-    const damageScale = combatMode === 'peaceful' ? '0' : '1';
-    this.liveValues.update(values => ({
-      ...values,
-      mp_friendlyfire: combatMode === 'ffa' ? '1' : '0',
-      mp_teammates_are_enemies: combatMode === 'ffa' ? '1' : '0',
-      mp_damage_scale_ct_head: damageScale,
-      mp_damage_scale_ct_body: damageScale,
-      mp_damage_scale_t_head: damageScale,
-      mp_damage_scale_t_body: damageScale,
-      mp_damage_headshot_only: '0'
-    }));
+    if (actionId === 'enable-bhop' || actionId === 'disable-bhop') {
+      const value = actionId === 'enable-bhop' ? '1' : '0';
+      this.liveValues.update(values => ({
+        ...values,
+        sv_enablebunnyhopping: value,
+        sv_autobunnyhopping: value
+      }));
+      return;
+    }
+
+    if (actionId === 'respawn-round' || actionId === 'respawn-instant') {
+      const respawnMode: Cs2RespawnMode = actionId === 'respawn-instant' ? 'instant' : 'round';
+      const value = respawnMode === 'instant' ? '1' : '0';
+      this.liveValues.update(values => ({
+        ...values,
+        mp_respawn_on_death_t: value,
+        mp_respawn_on_death_ct: value,
+        mp_ignore_round_win_conditions: value
+      }));
+      this.updateActiveProfilePolicy({ respawnMode });
+      return;
+    }
+
+    if (actionId.startsWith('hud-')) {
+      const hudMode = actionId.slice(4) as Cs2HudMode;
+      this.liveControl.update(control => control ? { ...control, activeHudMode: hudMode } : control);
+      this.updateActiveProfilePolicy({ hudMode });
+    }
+  }
+
+  private updateActiveProfilePolicy(update: Partial<Pick<Cs2ModeProfile, 'combatMode' | 'respawnMode' | 'hudMode'>>): void {
     this.modeState.update(state => state ? {
       ...state,
       profiles: state.profiles.map(profile => profile.id === state.activeProfileId
-        ? { ...profile, combatMode }
+        ? { ...profile, ...update }
         : profile)
     } : state);
   }
