@@ -408,7 +408,7 @@ input:focus, select:focus { border-color: #4b8d72; box-shadow: 0 0 0 3px #4de3a1
 .live-editor-search > span { padding-left: 14px; color: var(--green); font-size: 1.05rem; }
 .live-editor-search input { min-width: 0; min-height: 46px; border: 0; outline: 0; background: transparent; box-shadow: none; }
 .live-editor-search button { height: 30px; margin-right: 8px; padding: 0 9px; border: 1px solid #334253; border-radius: 6px; color: #a9b7c8; background: #121b24; cursor: pointer; font-size: .57rem; font-weight: 800; }
-.live-group-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 20px; }
+.live-group-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 7px; margin-bottom: 20px; }
 .live-group-tabs button { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 50px; padding: 8px 10px; border: 1px solid #293746; border-radius: 9px; color: #94a3b5; background: #0d131a; text-align: left; cursor: pointer; }
 .live-group-tabs button:hover, .live-group-tabs button.active { border-color: #3d765f; color: #dce8e2; background: #11231b; }
 .live-group-tabs button > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 7px; color: var(--green); background: #173426; font-size: .64rem; font-weight: 900; }

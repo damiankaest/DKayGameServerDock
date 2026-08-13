@@ -40,6 +40,12 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         new("bot_difficulty", "Bot difficulty", "Teams & bots", "integer", "1", "Bot skill from 0 (easy) to 5 (maximum).", 0, 5, 1),
         new("bot_quota_mode", "Bot quota mode", "Teams & bots", "select", "normal", "Normal keeps manually added bots stable; fill and match manage bot counts automatically.", Options: ["normal", "fill", "match"]),
 
+        new("mp_damage_scale_ct_head", "CT head damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Counter-Terrorist head hits. One is normal damage.", 0, 5, 0.1m),
+        new("mp_damage_scale_ct_body", "CT body damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Counter-Terrorist body hits. One is normal damage.", 0, 5, 0.1m),
+        new("mp_damage_scale_t_head", "T head damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Terrorist head hits. One is normal damage.", 0, 5, 0.1m),
+        new("mp_damage_scale_t_body", "T body damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Terrorist body hits. One is normal damage.", 0, 5, 0.1m),
+        new("mp_damage_headshot_only", "Headshots only", "Combat & damage", "boolean", "0", "Ignore body damage and only accept headshots.", Options: ["0", "1"]),
+
         new("sv_gravity", "Gravity", "Movement & physics", "integer", "800", "World gravity used for jumps, Surf and ScoutzKnivez.", 100, 2000, 10),
         new("sv_airaccelerate", "Air acceleration", "Movement & physics", "integer", "12", "Mid-air steering strength used by Surf, KZ and Bhop.", 0, 5000, 1),
         new("sv_accelerate", "Ground acceleration", "Movement & physics", "decimal", "5.5", "How quickly players gain speed while touching the ground.", 0, 100, 0.1m),
@@ -454,7 +460,7 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
 
     private static string NormalizeLiveSetting(Cs2LiveSettingDescriptor definition, string value)
     {
-        value = value?.Trim() ?? string.Empty;
+        value = (value?.Trim() ?? string.Empty).Trim('"');
         if (definition.Type == "boolean")
         {
             return value.ToLowerInvariant() switch
@@ -467,12 +473,13 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
 
         if (definition.Options is { Count: > 0 } options)
         {
-            if (!options.Contains(value, StringComparer.Ordinal))
+            var canonical = options.FirstOrDefault(option => string.Equals(option, value, StringComparison.OrdinalIgnoreCase));
+            if (canonical is null)
             {
                 throw new InvalidOperationException($"'{definition.Label}' contains an unsupported value.");
             }
 
-            return value;
+            return canonical;
         }
 
         if (definition.Type is "integer" or "decimal")
