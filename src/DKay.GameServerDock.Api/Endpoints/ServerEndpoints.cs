@@ -47,6 +47,39 @@ public static class ServerEndpoints
             modes.GetStateAsync(id, token));
         group.MapPut("/{id:guid}/cs2-mode", ApplyCs2ModeAsync);
         group.MapPost("/{id:guid}/cs2-packages/{packageId}/install", QueueCs2PackageAsync);
+        group.MapGet("/{id:guid}/cs2-workshop/search", async (
+                Guid id,
+                string query,
+                int? take,
+                Cs2ModeService modes,
+                CancellationToken token) =>
+            Results.Ok(await modes.SearchWorkshopMapsAsync(id, query, take, token)));
+        group.MapPut("/{id:guid}/cs2-workshop/key", async (
+                Guid id,
+                ConfigureCs2WorkshopKeyRequest request,
+                Cs2ModeService modes,
+                CancellationToken token) =>
+            Results.Ok(await modes.ConfigureWorkshopKeyAsync(id, request, token)));
+        group.MapGet("/{id:guid}/cs2-control", async (Guid id, Cs2LiveControlService controls, CancellationToken token) =>
+            Results.Ok(await controls.GetStateAsync(id, token)));
+        group.MapPut("/{id:guid}/cs2-control", async (
+                Guid id,
+                ApplyCs2LiveConfigurationRequest request,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.ApplyAsync(id, request, token)));
+        group.MapPost("/{id:guid}/cs2-control/actions", async (
+                Guid id,
+                RunCs2QuickActionRequest request,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.RunActionAsync(id, request, token)));
+        group.MapPut("/{id:guid}/cs2-control/gslt", async (
+                Guid id,
+                ConfigureCs2GsltRequest request,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.ConfigureGsltAsync(id, request, token)));
         group.MapPost("/{id:guid}/command", SendCommandAsync);
         group.MapPost("/{id:guid}/self-test", async (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
             Results.Ok(await orchestrator.TestCommandChannelAsync(id, token)));

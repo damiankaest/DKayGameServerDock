@@ -28,6 +28,7 @@ public sealed class Cs2Installer(
         Func<InstallationProgress, CancellationToken, Task> reportProgress,
         CancellationToken cancellationToken)
     {
+        runtime.ProtectPersistentState(server);
         await _steam.UpdateAsync(server, reportProgress, cancellationToken);
         runtime.Prepare(server);
         await WriteServerConfigAsync(server, cancellationToken);
@@ -48,6 +49,8 @@ public sealed class Cs2Installer(
             $"sv_password \"{password}\"",
             $"sv_visiblemaxplayers {maxPlayers}",
             "sv_lan 0",
+            "sv_broadcast_ugc_downloads 1",
+            "sv_broadcast_ugc_download_progress_interval 5",
             "log on",
             "exec dkay-mode.cfg"
         };

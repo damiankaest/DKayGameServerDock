@@ -11,7 +11,7 @@ using DKay.GameServerDock.Infrastructure.Installation;
 
 namespace DKay.GameServerDock.Infrastructure.Games;
 
-public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeManager
+public sealed partial class Cs2ModeManager : ICs2ModeManager
 {
     private const long MaximumDownloadBytes = 256L * 1024 * 1024;
     private static readonly JsonSerializerOptions FileJsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -26,6 +26,19 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
             ["sharp-timer"] = new(PackageSourceKind.GitHubRelease, "Letaryat/poor-sharptimer"),
             ["cs2kz"] = new(PackageSourceKind.GitHubRelease, "KZGlobalTeam/cs2kz-metamod")
         };
+    private readonly HttpClient httpClient;
+    private readonly Cs2RuntimeProvisioner runtime;
+
+    public Cs2ModeManager(HttpClient httpClient)
+        : this(httpClient, new Cs2RuntimeProvisioner(new DockOptions()))
+    {
+    }
+
+    public Cs2ModeManager(HttpClient httpClient, Cs2RuntimeProvisioner runtime)
+    {
+        this.httpClient = httpClient;
+        this.runtime = runtime;
+    }
 
     public IReadOnlyList<Cs2ModePresetDescriptor> Presets => Cs2ModeCatalog.Presets;
     public IReadOnlyList<Cs2ManagedPackageDescriptor> Packages => Cs2ModeCatalog.Packages;
@@ -66,8 +79,16 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
         var preset = Presets.FirstOrDefault(item => string.Equals(item.Id, request.PresetId, StringComparison.Ordinal))
             ?? throw new ArgumentException($"Unknown CS2 preset '{request.PresetId}'.");
         var convars = Cs2ModeCatalog.BuildConVars(preset, request);
-        var mapName = request.MapName.Trim();
         var workshopId = string.IsNullOrWhiteSpace(request.WorkshopId) ? null : request.WorkshopId.Trim();
+        Cs2WorkshopMap? workshopMap = null;
+        if (workshopId is not null)
+        {
+            _ = runtime.GetWorkshopApiKey(server);
+            workshopMap = await GetWorkshopMapAsync(workshopId, cancellationToken);
+        }
+
+        var mapName = workshopMap?.MapName ?? request.MapName.Trim();
+        Cs2ModeCatalog.ValidateMap(mapName, workshopId);
         var profileId = workshopId is null ? mapName.ToLowerInvariant() : $"workshop-{workshopId}";
         var normalizedOverrides = (request.Overrides ?? new Dictionary<string, string>())
             .Where(pair => preset.Settings.Any(setting => setting.Editable && setting.Key == pair.Key))
@@ -78,6 +99,9 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
             preset.Name,
             mapName,
             workshopId,
+            workshopMap?.Title,
+            workshopMap?.PreviewUrl,
+            workshopId is null ? "local" : GetWorkshopInstallState(server, workshopId),
             request.BotQuota,
             request.BotDifficulty,
             normalizedOverrides,
@@ -109,6 +133,72 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
         document = new ModeDocument(profile.Id, profiles);
         await WriteJsonAtomicallyAsync(GetModeDocumentPath(server), document, cancellationToken);
         return BuildState(server, document);
+    }
+
+    public Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server) =>
+        runtime.GetWorkshopAccessState(server);
+
+    public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key) =>
+        runtime.SaveWorkshopApiKey(server, key);
+
+    public async Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(
+        GameServerInstance server,
+        string query,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        query = query?.Trim() ?? string.Empty;
+        if (query.Length is < 2 or > 80)
+        {
+            throw new ArgumentException("Workshop search text must contain between 2 and 80 characters.");
+        }
+
+        var key = runtime.GetWorkshopApiKey(server);
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["key"] = key,
+            ["query_type"] = "0",
+            ["page"] = "1",
+            ["numperpage"] = Math.Clamp(take, 1, 30).ToString(CultureInfo.InvariantCulture),
+            ["creator_appid"] = "730",
+            ["appid"] = "730",
+            ["search_text"] = query,
+            ["filetype"] = "0",
+            ["return_vote_data"] = "true",
+            ["return_tags"] = "true",
+            ["return_previews"] = "true",
+            ["return_short_description"] = "true"
+        };
+        var queryString = string.Join("&", parameters.Select(pair =>
+            $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"));
+        var url = new Uri($"https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/?{queryString}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = await SendSteamApiAsync(request, cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("response", out var root))
+        {
+            throw new InvalidDataException("Steam Workshop returned an unexpected search response.");
+        }
+
+        var total = (int)Math.Clamp(ReadInt64(root, "total"), 0, int.MaxValue);
+        var items = new List<Cs2WorkshopMap>();
+        if (root.TryGetProperty("publishedfiledetails", out var details) && details.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var detail in details.EnumerateArray())
+            {
+                try
+                {
+                    items.Add(ParseWorkshopMap(detail));
+                }
+                catch (InvalidDataException)
+                {
+                    // Removed, private, collection, or otherwise unusable entries never become selectable maps.
+                }
+            }
+        }
+
+        return new Cs2WorkshopSearchResult(query, total, items);
     }
 
     public IReadOnlyList<string> ResolveAutomaticInstallOrder(IEnumerable<string> packageIds)
@@ -232,6 +322,12 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
 
     private Cs2ModeState BuildState(GameServerInstance server, ModeDocument document)
     {
+        var profiles = document.Profiles.Select(profile => profile with
+        {
+            WorkshopInstallState = profile.WorkshopId is null
+                ? "local"
+                : GetWorkshopInstallState(server, profile.WorkshopId)
+        }).ToArray();
         var packageStates = Packages.Select(package =>
         {
             var marker = ReadPackageMarker(server, package.Id);
@@ -249,8 +345,250 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
                 marker.InstalledAt,
                 package.DependencyIds);
         }).ToArray();
-        return new Cs2ModeState(document.ActiveProfileId, document.Profiles, packageStates);
+        return new Cs2ModeState(document.ActiveProfileId, profiles, packageStates, runtime.GetWorkshopAccessState(server));
     }
+
+    private async Task<Cs2WorkshopMap> GetWorkshopMapAsync(
+        string publishedFileId,
+        CancellationToken cancellationToken)
+    {
+        if (!WorkshopIdPattern().IsMatch(publishedFileId))
+        {
+            throw new ArgumentException("Workshop id must be a positive numeric Steam Workshop id.");
+        }
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["itemcount"] = "1",
+                ["publishedfileids[0]"] = publishedFileId
+            })
+        };
+        using var response = await SendSteamApiAsync(request, cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (!json.RootElement.TryGetProperty("response", out var root) ||
+            !root.TryGetProperty("publishedfiledetails", out var details) ||
+            details.ValueKind != JsonValueKind.Array ||
+            details.GetArrayLength() != 1)
+        {
+            throw new InvalidDataException("Steam Workshop did not return details for this map.");
+        }
+
+        try
+        {
+            return ParseWorkshopMap(details[0]);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new InvalidOperationException(
+                $"Workshop item {publishedFileId} cannot be used as a CS2 map. It may be removed, private, a collection, or incompatible with CS2. {exception.Message}",
+                exception);
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendSteamApiAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("DKayGameServerDock", "1.0"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.RequestMessage?.RequestUri is not { } finalUri ||
+            !finalUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !finalUri.Host.Equals("api.steampowered.com", StringComparison.OrdinalIgnoreCase))
+        {
+            response.Dispose();
+            throw new InvalidOperationException("Steam Workshop redirected to an untrusted API host.");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var status = response.StatusCode;
+            response.Dispose();
+            throw new InvalidOperationException($"Steam Workshop API returned HTTP {(int)status}. Check the protected Web API key and try again.");
+        }
+
+        return response;
+    }
+
+    private static Cs2WorkshopMap ParseWorkshopMap(JsonElement detail)
+    {
+        var result = ReadInt64(detail, "result");
+        if (result != 1)
+        {
+            throw new InvalidDataException($"Steam result code {result} indicates that the item is unavailable.");
+        }
+
+        var consumerAppId = ReadInt64(detail, "consumer_app_id", "consumer_appid");
+        if (consumerAppId != 730)
+        {
+            throw new InvalidDataException("The item does not belong to the Counter-Strike 2 Workshop.");
+        }
+
+        if (ReadBoolean(detail, "banned"))
+        {
+            throw new InvalidDataException("The Workshop item is banned.");
+        }
+
+        var publishedFileId = ReadString(detail, "publishedfileid");
+        if (!WorkshopIdPattern().IsMatch(publishedFileId))
+        {
+            throw new InvalidDataException("Steam returned an invalid Workshop id.");
+        }
+
+        var fileType = ReadInt64(detail, "file_type");
+        if (fileType != 0)
+        {
+            throw new InvalidDataException("The Workshop item is not an individual map file.");
+        }
+
+        var title = ReadString(detail, "title").Trim();
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new InvalidDataException("The Workshop map has no title.");
+        }
+
+        string? previewUrl = null;
+        var previewCandidate = ReadString(detail, "preview_url");
+        if (Uri.TryCreate(previewCandidate, UriKind.Absolute, out var preview) &&
+            preview.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+            IsTrustedSteamImageHost(preview.Host))
+        {
+            previewUrl = preview.ToString();
+        }
+
+        var tags = detail.TryGetProperty("tags", out var tagsElement) && tagsElement.ValueKind == JsonValueKind.Array
+            ? tagsElement.EnumerateArray()
+                .Select(tag => ReadString(tag, "display_name", "tag"))
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToArray()
+            : [];
+        return new Cs2WorkshopMap(
+            publishedFileId,
+            title,
+            DeriveMapName(title, publishedFileId),
+            previewUrl,
+            $"https://steamcommunity.com/sharedfiles/filedetails/?id={publishedFileId}",
+            Math.Max(0, ReadInt64(detail, "file_size")),
+            Math.Max(0, ReadInt64(detail, "subscriptions")),
+            ReadUnixTimestamp(detail, "time_updated"),
+            tags);
+    }
+
+    private static string GetWorkshopInstallState(GameServerInstance server, string publishedFileId)
+    {
+        var workshopRoot = Path.Combine(server.InstallDirectory, "game", "csgo", "maps", "workshop", publishedFileId);
+        if (!Directory.Exists(workshopRoot))
+        {
+            return "pending";
+        }
+
+        try
+        {
+            return Directory.EnumerateFiles(workshopRoot, "*", SearchOption.AllDirectories)
+                .Any(file => file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase) ||
+                             file.EndsWith(".bsp", StringComparison.OrdinalIgnoreCase))
+                ? "installed"
+                : "pending";
+        }
+        catch (IOException)
+        {
+            return "pending";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return "pending";
+        }
+    }
+
+    private static string DeriveMapName(string title, string publishedFileId)
+    {
+        var match = WorkshopMapNamePattern().Match(title);
+        if (match.Success)
+        {
+            return match.Groups["map"].Value[..Math.Min(64, match.Groups["map"].Value.Length)];
+        }
+
+        var sanitized = Regex.Replace(title.ToLowerInvariant(), "[^a-z0-9_-]+", "_").Trim('_', '-');
+        return string.IsNullOrWhiteSpace(sanitized)
+            ? $"workshop_{publishedFileId}"
+            : sanitized[..Math.Min(64, sanitized.Length)];
+    }
+
+    private static long ReadInt64(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!element.TryGetProperty(propertyName, out var property))
+            {
+                continue;
+            }
+
+            if (property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out var number))
+            {
+                return number;
+            }
+
+            if (property.ValueKind == JsonValueKind.String &&
+                long.TryParse(property.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number))
+            {
+                return number;
+            }
+        }
+
+        return 0;
+    }
+
+    private static bool ReadBoolean(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) &&
+        (property.ValueKind == JsonValueKind.True ||
+         property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value) && value != 0);
+
+    private static string ReadString(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (element.TryGetProperty(propertyName, out var property))
+            {
+                return property.ValueKind switch
+                {
+                    JsonValueKind.String => property.GetString() ?? string.Empty,
+                    JsonValueKind.Number => property.GetRawText(),
+                    _ => string.Empty
+                };
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static DateTimeOffset? ReadUnixTimestamp(JsonElement element, string propertyName)
+    {
+        var seconds = ReadInt64(element, propertyName);
+        if (seconds <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return DateTimeOffset.FromUnixTimeSeconds(seconds);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsTrustedSteamImageHost(string host) =>
+        host.EndsWith(".steamusercontent.com", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".steamstatic.com", StringComparison.OrdinalIgnoreCase);
 
     private async Task<PackageDownload> ResolveMetamodSnapshotAsync(CancellationToken cancellationToken)
     {
@@ -554,4 +892,10 @@ public sealed partial class Cs2ModeManager(HttpClient httpClient) : ICs2ModeMana
 
     [GeneratedRegex("^-?[0-9]+(?:\\.[0-9]+)?$", RegexOptions.CultureInvariant)]
     private static partial Regex NumericValuePattern();
+
+    [GeneratedRegex("^[1-9][0-9]{0,19}$", RegexOptions.CultureInvariant)]
+    private static partial Regex WorkshopIdPattern();
+
+    [GeneratedRegex("(?<![A-Za-z0-9_-])(?<map>(?:surf|kz|bhop|de|cs|aim|awp|fy|ka|mg|ze|zm|jb|gg|dm|training)_[A-Za-z0-9_-]+)(?![A-Za-z0-9_-])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex WorkshopMapNamePattern();
 }

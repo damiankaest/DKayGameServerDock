@@ -83,7 +83,7 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
-    public void Prepare_loads_managed_rcon_before_first_map_without_overwriting_autoexec()
+    public void Prepare_loads_managed_bootstrap_before_first_map_without_overwriting_autoexec()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -105,8 +105,143 @@ public sealed class Cs2RuntimeProvisionerTests
             var autoexec = File.ReadAllLines(Path.Combine(cfgRoot, "autoexec.cfg"));
             Assert.Contains("hostname \"existing\"", autoexec);
             Assert.Single(autoexec, line => line.Trim().Equals("exec dkay-rcon.cfg", StringComparison.OrdinalIgnoreCase));
+            var bootstrap = File.ReadAllLines(Path.Combine(cfgRoot, "dkay-bootstrap.cfg"));
+            Assert.Contains("exec dkay-rcon.cfg", bootstrap);
             Assert.True(File.Exists(Path.Combine(cfgRoot, "dkay-rcon.cfg")));
             Assert.True(File.Exists(Path.Combine(root, ".dkay", "rcon-password")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Prepare_migrates_legacy_gslt_and_repairs_generated_files_after_updates()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        const string token = "0123456789abcdef0123456789abcdef";
+        var root = CreateTemporaryDirectory();
+        var cfgRoot = Path.Combine(root, "game", "csgo", "cfg");
+        Directory.CreateDirectory(cfgRoot);
+        File.WriteAllText(Path.Combine(cfgRoot, "dkay-gslt.cfg"), $"sv_setsteamaccount \"{token}\"\n");
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            provisioner.Prepare(server);
+
+            var secretPath = Path.Combine(root, ".dkay", "gslt-token");
+            Assert.Equal(token, File.ReadAllText(secretPath).Trim());
+            Assert.True(provisioner.GetGsltState(server).ProtectedFromGameUpdates);
+
+            // Simulate SteamCMD or a Hub update replacing generated game cfg files.
+            File.Delete(Path.Combine(cfgRoot, "dkay-gslt.cfg"));
+            File.WriteAllText(Path.Combine(cfgRoot, "dkay-bootstrap.cfg"), "overwritten\n");
+            provisioner.Prepare(server);
+
+            Assert.Contains(token, File.ReadAllText(Path.Combine(cfgRoot, "dkay-gslt.cfg")), StringComparison.Ordinal);
+            Assert.Contains("exec dkay-gslt.cfg", File.ReadAllText(Path.Combine(cfgRoot, "dkay-bootstrap.cfg")), StringComparison.Ordinal);
+            Assert.Equal(token, File.ReadAllText(secretPath).Trim());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Live_control_settings_survive_generated_cfg_replacement()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            var values = new Dictionary<string, string>
+            {
+                ["sv_cheats"] = "1",
+                ["sv_maxvelocity"] = "10000",
+                ["mp_warmuptime"] = "180"
+            };
+            var saved = provisioner.SaveLiveSettings(server, values);
+            Assert.Equal("1", saved["sv_cheats"]);
+            Assert.Equal("10000", saved["sv_maxvelocity"]);
+
+            var liveConfigPath = Path.Combine(root, "game", "csgo", "cfg", "dkay-live.cfg");
+            File.WriteAllText(liveConfigPath, "overwritten\n");
+            provisioner.Prepare(server);
+
+            var liveConfig = File.ReadAllText(liveConfigPath);
+            Assert.Contains("sv_cheats 1", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("sv_maxvelocity 10000", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("mp_warmuptime 180", liveConfig, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(root, ".dkay", "live-settings.json")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Steam_workshop_key_is_masked_and_survives_generated_file_replacement()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        const string key = "0123456789abcdef0123456789abcdef";
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            var state = provisioner.SaveWorkshopApiKey(server, key);
+            Assert.True(state.Configured);
+            Assert.NotNull(state.MaskedKey);
+            Assert.DoesNotContain(key, state.MaskedKey!, StringComparison.Ordinal);
+            Assert.True(state.ProtectedFromGameUpdates);
+
+            var generatedPath = Path.Combine(root, "game", "csgo", "webapi_authkey.txt");
+            Assert.Equal(key, File.ReadAllText(generatedPath).Trim());
+            File.Delete(generatedPath);
+
+            provisioner.Prepare(server);
+
+            Assert.Equal(key, File.ReadAllText(generatedPath).Trim());
+            Assert.Equal(key, File.ReadAllText(Path.Combine(root, ".dkay", "steam-web-api-key")).Trim());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Steam_workshop_key_rejects_non_api_key_values()
+    {
+        var root = CreateTemporaryDirectory();
+        var server = CreateServer(root, 27015);
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            Assert.Throws<InvalidOperationException>(() => provisioner.SaveWorkshopApiKey(server, "+quit"));
         }
         finally
         {

@@ -45,6 +45,12 @@ public sealed class Cs2ModeServiceTests
             throw new NotSupportedException();
         public Task<Cs2ModeState> ApplyPresetAsync(GameServerInstance server, ApplyCs2ModePresetRequest request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server) =>
+            new(false, null, false, "not configured");
+        public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key) =>
+            throw new NotSupportedException();
+        public Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(GameServerInstance server, string query, int take, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Task RepairAfterGameUpdateAsync(GameServerInstance server, CancellationToken cancellationToken) => Task.CompletedTask;
         public IReadOnlyList<string> ResolveAutomaticInstallOrder(IEnumerable<string> packageIds) => packageIds.ToArray();
         public Task InstallPackageAsync(

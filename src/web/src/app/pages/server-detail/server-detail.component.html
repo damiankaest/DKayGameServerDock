@@ -18,7 +18,7 @@
       <section class="install-banner"><div><strong>{{ progress()?.message || 'Preparing installation…' }}</strong><small>{{ progress()?.stage || current.status }}</small></div><b>{{ progress()?.percent || 0 }}%</b><div class="meter"><i [style.width.%]="progress()?.percent || 0"></i></div></section>
     }
 
-    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="tab.set('overview')">Overview</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'modes'" (click)="tab.set('modes')">Modes & maps</button> }<button [class.active]="tab() === 'console'" (click)="tab.set('console')">Console</button><button [class.active]="tab() === 'players'" (click)="tab.set('players')">Players <i>{{ current.players.length }}</i></button></nav>
+    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="selectTab('overview')">Overview</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'control'" (click)="selectTab('control')">Live control</button><button [class.active]="tab() === 'modes'" (click)="selectTab('modes')">Modes & maps</button> }<button [class.active]="tab() === 'console'" (click)="selectTab('console')">Console</button><button [class.active]="tab() === 'players'" (click)="selectTab('players')">Players <i>{{ current.players.length }}</i></button></nav>
 
     @if (tab() === 'overview') {
       <div class="detail-grid">
@@ -61,6 +61,12 @@
           <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
         </section>
 
+        @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed') {
+          <p class="publication-warning full"><b>CS2 is running without a detected Workshop payload.</b> The selected map has not appeared under the server's Workshop map cache. Stop CS2, verify the Steam Web API key, choose a validated map below and start it again while watching the live console.</p>
+        } @else if (current.status === 'Running' && !current.currentMap) {
+          <p class="publication-warning full"><b>The process is running, but no active map is being reported.</b> A public join can still time out or land on an empty level. Run the command-channel self-test and inspect the first Workshop/download messages in Console.</p>
+        }
+
         @if (modeCatalog(); as catalog) {
           <section class="preset-grid">
             @for (preset of catalog.presets; track preset.id) {
@@ -71,12 +77,71 @@
             }
           </section>
 
+          @if (modeState()?.workshop; as workshop) {
+            <section class="panel full workshop-browser-panel">
+              <header>
+                <div><p class="eyebrow">STEAM WORKSHOP</p><h2>Find and add a map</h2><p>Search live Workshop listings instead of copying IDs. Removed, private, collection and non-CS2 items cannot be added.</p></div>
+                <span class="status" [attr.data-status]="workshop.configured ? 'Running' : 'Error'">{{ workshop.configured ? 'READY' : 'KEY REQUIRED' }}</span>
+              </header>
+
+              <div class="workshop-key-row" [class.configured]="workshop.configured">
+                <div>
+                  <strong>{{ workshop.configured ? 'Steam Web API connected' : 'Connect Steam Workshop' }}</strong>
+                  <small>{{ workshop.message }}</small>
+                  @if (workshop.maskedKey) { <code>{{ workshop.maskedKey }}</code> }
+                </div>
+                <div class="workshop-key-form">
+                  <input type="password" autocomplete="new-password" maxlength="32" placeholder="32-character Steam Web API key" [value]="workshopKey()" (input)="updateWorkshopKey($event)" />
+                  <button class="secondary-button" type="button" [disabled]="workshopKeySaving() || !workshopKey()" (click)="saveWorkshopKey()">{{ workshopKeySaving() ? 'Saving…' : workshop.configured ? 'Replace key' : 'Save key' }}</button>
+                </div>
+                <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">Create a Steam Web API key ↗</a>
+              </div>
+
+              @if (workshop.configured) {
+                <form class="workshop-search" (submit)="$event.preventDefault(); searchWorkshop()">
+                  <span>⌕</span>
+                  <input maxlength="80" placeholder="Search maps, e.g. surf beginner" [value]="workshopQuery()" (input)="updateWorkshopQuery($event)" />
+                  <button class="primary-button" type="submit" [disabled]="workshopSearching() || workshopQuery().trim().length < 2">{{ workshopSearching() ? 'Searching Steam…' : 'Search maps' }}</button>
+                </form>
+              }
+
+              @if (workshopMessage()) { <p class="workshop-message">{{ workshopMessage() }}</p> }
+
+              @if (workshopSearching()) {
+                <div class="workshop-loading"><i></i><span>Searching the Counter-Strike 2 Workshop…</span></div>
+              } @else if (workshopResults().length) {
+                <div class="workshop-result-grid">
+                  @for (map of workshopResults(); track map.publishedFileId) {
+                    <article class="workshop-map-card">
+                      <a class="workshop-preview" [href]="map.workshopUrl" target="_blank" rel="noreferrer">
+                        @if (map.previewUrl) { <img [src]="map.previewUrl" [alt]="map.title" loading="lazy" /> } @else { <span>CS2</span> }
+                        <i>Workshop {{ map.publishedFileId }}</i>
+                      </a>
+                      <div class="workshop-map-body">
+                        <h3>{{ map.title }}</h3>
+                        <code>{{ map.mapName }}</code>
+                        <div class="workshop-map-meta"><span>{{ formatWorkshopSize(map.fileSize) }}</span><span>{{ formatWorkshopCount(map.subscriptions) }} subscribers</span>@if (map.updatedAt) { <span>Updated {{ map.updatedAt | date:'mediumDate' }}</span> }</div>
+                        <div class="workshop-tags">@for (tag of map.tags.slice(0, 4); track tag) { <span>{{ tag }}</span> }</div>
+                      </div>
+                      <footer>
+                        <a [href]="map.workshopUrl" target="_blank" rel="noreferrer">Details ↗</a>
+                        <button class="primary-button small" type="button" [disabled]="modeSaving() || (current.status !== 'Stopped' && current.status !== 'Crashed' && current.status !== 'Error')" (click)="addWorkshopMap(map)">{{ workshopAdding() === map.publishedFileId ? 'Adding…' : 'Add & activate' }}</button>
+                      </footer>
+                    </article>
+                  }
+                </div>
+                @if (workshopTotal() > workshopResults().length) { <p class="readiness-note">Refine the search to narrow {{ workshopTotal().toLocaleString() }} results. The first compatible entries are shown.</p> }
+              }
+              <p class="workshop-download-note"><b>How download works:</b> Add a map while the server is stopped, then start it. CS2 validates the Workshop item, downloads the latest version into its managed map cache and hosts it with the selected {{ selectedPreset()?.name || 'mode' }} settings. Progress appears in the live console.</p>
+            </section>
+          }
+
           @if (selectedPreset(); as preset) {
             <section class="panel mode-config-panel">
               <header><div><p class="eyebrow">ACTIVE EDITOR</p><h2>{{ preset.name }} profile</h2></div><span class="mode-package-count">{{ preset.recommendedPackageIds.length }} managed mods</span></header>
               <div class="mode-form-grid">
                 <label>Map name<input maxlength="64" placeholder="surf_utopia_njv" [value]="modeMapName()" (input)="updateModeText('map', $event)" /><small>Letters, digits, underscores and hyphens only.</small></label>
-                <label>Steam Workshop ID <em>optional</em><input inputmode="numeric" placeholder="3072851041" [value]="modeWorkshopId()" (input)="updateModeText('workshop', $event)" /><small>The server starts this Workshop item instead of a stock map.</small></label>
+                <label>Steam Workshop ID <em>advanced fallback</em><input inputmode="numeric" placeholder="Choose a validated map above" [value]="modeWorkshopId()" (input)="updateModeText('workshop', $event)" /><small>Direct IDs are validated with Steam before the profile is saved.</small></label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {
@@ -104,7 +169,7 @@
               <header><div><p class="eyebrow">PER-MAP PROFILES</p><h2>Configured maps</h2></div><small>{{ state.profiles.length }} saved</small></header>
               <div class="profile-list">
                 @for (profile of state.profiles; track profile.id) {
-                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? 'Workshop ' + profile.workshopId : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
+                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.workshopTitle || profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? (profile.workshopInstallState === 'installed' ? 'Workshop installed' : 'Workshop downloads on start') : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
                 } @empty { <div class="empty-state compact"><h3>No map profiles yet</h3><p>Pick a preset above and apply it to your first map.</p></div> }
               </div>
             </section>
@@ -123,18 +188,104 @@
           <div class="skeleton-block tall"></div>
         }
       </div>
+    } @else if (tab() === 'control') {
+      <div class="live-control-workbench">
+        <section class="panel full live-control-hero">
+          <div>
+            <p class="eyebrow">MATCH DIRECTOR</p>
+            <h2>Control the running server without memorizing console commands</h2>
+            <p>Round flow, bots, movement and private practice settings are applied through the protected local RCON channel.</p>
+          </div>
+          <div class="live-control-status">
+            <span class="status" [attr.data-status]="current.status">{{ current.status }}</span>
+            <button class="secondary-button small" type="button" [disabled]="liveLoading() || liveSaving() || liveAction() !== ''" (click)="loadCs2Control()">{{ liveLoading() ? 'Reading…' : '↻ Refresh live values' }}</button>
+          </div>
+        </section>
+
+        @if (liveMessage()) {
+          <p class="live-control-message">{{ liveMessage() }}</p>
+        }
+
+        @if (liveLoading() && !liveControl()) {
+          <div class="skeleton-block tall full"></div>
+        } @else if (liveControl(); as control) {
+          <section class="panel full live-actions-panel">
+            <header><div><p class="eyebrow">ONE-CLICK ACTIONS</p><h2>Match and practice controls</h2></div><small>{{ control.actions.length }} safe actions</small></header>
+            <div class="live-action-groups">
+              @for (group of liveActionGroups(); track group) {
+                <div class="live-action-group">
+                  <h3>{{ group }}</h3>
+                  <div class="live-action-grid">
+                    @for (action of liveActionsFor(group); track action.id) {
+                      <button type="button" [class.primary]="action.tone === 'primary'" [class.danger]="action.tone === 'danger'" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                        <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
+                        <strong>{{ action.label }}</strong>
+                        <small>{{ action.description }}</small>
+                        @if (action.requiresPlugin) { <em>PLUGIN</em> }
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            @if (!control.running) { <p class="readiness-note">Start the server to enable live actions. Configuration and Steam identity can still be prepared while it is stopped.</p> }
+          </section>
+
+          <section class="panel live-map-panel">
+            <header><div><p class="eyebrow">MAP CONTROL</p><h2>Change map now</h2></div><span>LIVE</span></header>
+            <p>Enter a stock or already installed Workshop map name. Players remain connected while CS2 changes level.</p>
+            <div class="live-inline-form">
+              <input maxlength="64" placeholder="de_mirage" [value]="liveMap()" (input)="updateLiveMap($event)" />
+              <button class="primary-button" type="button" [disabled]="!control.running || liveAction() !== '' || !liveMap().trim()" (click)="changeLiveMap()">{{ liveAction() === 'change-map' ? 'Changing…' : 'Change map' }}</button>
+            </div>
+          </section>
+
+          <section class="panel gslt-panel" [class.configured]="control.gslt.configured">
+            <header><div><p class="eyebrow">STEAM IDENTITY</p><h2>Game Server Login Token</h2></div><span>{{ control.gslt.configured ? 'PROTECTED' : 'MISSING' }}</span></header>
+            <p>{{ control.gslt.message }}</p>
+            @if (control.gslt.maskedToken) { <code>{{ control.gslt.maskedToken }}</code> }
+            <div class="live-inline-form">
+              <input type="password" autocomplete="new-password" placeholder="Paste a new App 730 GSLT" [value]="gsltToken()" (input)="updateGsltToken($event)" />
+              <button class="secondary-button" type="button" [disabled]="gsltSaving() || !gsltToken()" (click)="saveGslt()">{{ gsltSaving() ? 'Protecting…' : control.gslt.configured ? 'Replace token' : 'Save token' }}</button>
+            </div>
+            <small>The token is never returned to the browser. DKay stores it under <code>.dkay</code> and regenerates the CS2 cfg after every Hub, SteamCMD or preset update.</small>
+          </section>
+
+          <section class="panel full live-config-panel">
+            <header>
+              <div><p class="eyebrow">LIVE CONFIGURATION</p><h2>Runtime settings</h2><p>{{ control.liveReadMessage }}</p></div>
+              <button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply to live server' : 'Save for next start' }}</button>
+            </header>
+            <div class="live-setting-groups">
+              @for (group of liveGroups(); track group) {
+                <section class="live-setting-group">
+                  <h3>{{ group }}</h3>
+                  <div class="live-setting-grid">
+                    @for (setting of liveSettingsFor(group); track setting.key) {
+                      <label [class.cheat-setting]="setting.key === 'sv_cheats'">
+                        <span><strong>{{ setting.label }}</strong><code>{{ setting.key }}</code></span>
+                        @if (setting.type === 'boolean') {
+                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)"><option value="1">Enabled</option><option value="0">Disabled</option></select>
+                        } @else if (setting.type === 'select') {
+                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)">@for (option of setting.options || []; track option) { <option [value]="option">{{ option }}</option> }</select>
+                        } @else {
+                          <input type="number" [min]="setting.minimum" [max]="setting.maximum" [step]="setting.step || (setting.type === 'integer' ? 1 : 'any')" [value]="liveValues()[setting.key]" (input)="updateLiveValue(setting.key, $event)" />
+                        }
+                        <small>{{ setting.description }}</small>
+                      </label>
+                    }
+                  </div>
+                </section>
+              }
+            </div>
+            <div class="live-config-footer"><span><i></i>Values are persisted outside generated preset files</span><button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply changes' : 'Save changes' }}</button></div>
+          </section>
+        }
+      </div>
     } @else if (tab() === 'console') {
       @if (current.templateId === 'counter-strike-2') {
         <section class="console-tools">
-          <header><div><p class="eyebrow">CS2 ADMIN CONTROLS</p><h2>Quick commands & self-test</h2></div><button class="secondary-button small" type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="runSelfTest()">{{ commandAction() === 'self-test' ? 'Testing…' : 'Run self-test' }}</button></header>
-          <div class="quick-command-grid">
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('start-round', 'mp_warmup_end; mp_restartgame 1')"><span>▶</span><strong>Start round</strong><small>End warmup and restart</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('add-bot-ct', 'bot_add_ct')"><span>＋</span><strong>Add CT bot</strong><small>Add one counter-terrorist</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('add-bot-t', 'bot_add_t')"><span>＋</span><strong>Add T bot</strong><small>Add one terrorist</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('kill-bots', 'bot_kill')"><span>⌁</span><strong>Kill bots</strong><small>End current bot lives</small></button>
-            <button type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="quickCommand('remove-bots', 'bot_kick')"><span>−</span><strong>Remove bots</strong><small>Kick every bot</small></button>
-            <button class="danger" type="button" [disabled]="current.status !== 'Running' || actioning() !== ''" (click)="action('stop')"><span>■</span><strong>Quit server</strong><small>Graceful RCON shutdown</small></button>
-          </div>
+          <header><div><p class="eyebrow">RAW CONSOLE</p><h2>Advanced commands & diagnostics</h2><p class="muted">Everyday controls now live in the guided Live control tab. Use this terminal for commands that are not part of the safe control catalog.</p></div><button class="secondary-button small" type="button" [disabled]="current.status !== 'Running' || commandAction() !== ''" (click)="runSelfTest()">{{ commandAction() === 'self-test' ? 'Testing…' : 'Run self-test' }}</button></header>
           @if (selfTestResult(); as test) { <div class="self-test-result" [class.passed]="test.passed"><strong>{{ test.passed ? '✓ Command channel ready' : '✕ Command channel failed' }}</strong><span>{{ test.message }}</span><code>{{ test.transport }} · 127.0.0.1:{{ test.port }} · PID {{ test.processId || '—' }}</code></div> }
         </section>
       }

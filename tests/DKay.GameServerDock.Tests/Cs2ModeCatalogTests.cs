@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using DKay.GameServerDock.Application.Models;
 using DKay.GameServerDock.Domain;
+using DKay.GameServerDock.Infrastructure;
 using DKay.GameServerDock.Infrastructure.Games;
 
 namespace DKay.GameServerDock.Tests;
@@ -122,6 +123,81 @@ public sealed class Cs2ModeCatalogTests
         }
     }
 
+    [Fact]
+    public async Task Workshop_search_returns_only_usable_cs2_map_items()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-workshop-search-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            var runtime = new Cs2RuntimeProvisioner(new DockOptions());
+            runtime.SaveWorkshopApiKey(server, "0123456789abcdef0123456789abcdef");
+            using var httpClient = new HttpClient(new WorkshopHandler(false));
+            var manager = new Cs2ModeManager(httpClient, runtime);
+
+            var result = await manager.SearchWorkshopMapsAsync(server, "surf beginner", 18, CancellationToken.None);
+
+            Assert.Equal(2, result.Total);
+            var map = Assert.Single(result.Items);
+            Assert.Equal("3141592653", map.PublishedFileId);
+            Assert.Equal("surf_beginner_cs2", map.MapName);
+            Assert.Equal("Surf", Assert.Single(map.Tags));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Workshop_profile_rejects_removed_or_incompatible_item_before_writing_config()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-workshop-invalid-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            var runtime = new Cs2RuntimeProvisioner(new DockOptions());
+            runtime.SaveWorkshopApiKey(server, "0123456789abcdef0123456789abcdef");
+            using var httpClient = new HttpClient(new WorkshopHandler(true));
+            var manager = new Cs2ModeManager(httpClient, runtime);
+            var request = new ApplyCs2ModePresetRequest(
+                "surf",
+                "surf_beginner",
+                "607186931",
+                0,
+                1,
+                false,
+                new Dictionary<string, string>());
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                manager.ApplyPresetAsync(server, request, CancellationToken.None));
+
+            Assert.Contains("removed, private, a collection, or incompatible", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(root, "game", "csgo", "cfg", "dkay-mode.cfg")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static GameServerInstance CreateServer(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        return GameServerInstance.Create(
+            Guid.NewGuid(),
+            "CS2 Workshop test",
+            "counter-strike-2",
+            root,
+            "latest",
+            27015,
+            null,
+            null,
+            4096,
+            "{}",
+            DateTimeOffset.UtcNow);
+    }
+
     private static byte[] CreateCs2TagsArchive()
     {
         using var output = new MemoryStream();
@@ -161,6 +237,24 @@ public sealed class Cs2ModeCatalogTests
             }
 
             response.RequestMessage = request;
+            return Task.FromResult(response);
+        }
+    }
+
+    private sealed class WorkshopHandler(bool removedDetails) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var body = removedDetails
+                ? "{\"response\":{\"result\":1,\"resultcount\":1,\"publishedfiledetails\":[{\"publishedfileid\":\"607186931\",\"result\":9}]}}"
+                : "{\"response\":{\"total\":2,\"publishedfiledetails\":[{\"publishedfileid\":\"3141592653\",\"result\":1,\"consumer_appid\":730,\"file_type\":0,\"title\":\"surf_beginner_cs2\",\"file_size\":\"104857600\",\"subscriptions\":\"42000\",\"time_updated\":1770000000,\"preview_url\":\"https://images.steamusercontent.com/example.jpg\",\"tags\":[{\"tag\":\"Surf\",\"display_name\":\"Surf\"}]},{\"publishedfileid\":\"607186931\",\"result\":9}]}}";
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                RequestMessage = request
+            };
             return Task.FromResult(response);
         }
     }

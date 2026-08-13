@@ -14,6 +14,13 @@ public interface ICs2ModeManager
         GameServerInstance server,
         ApplyCs2ModePresetRequest request,
         CancellationToken cancellationToken);
+    Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server);
+    Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key);
+    Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(
+        GameServerInstance server,
+        string query,
+        int take,
+        CancellationToken cancellationToken);
     Task RepairAfterGameUpdateAsync(GameServerInstance server, CancellationToken cancellationToken);
     IReadOnlyList<string> ResolveAutomaticInstallOrder(IEnumerable<string> packageIds);
     Task InstallPackageAsync(

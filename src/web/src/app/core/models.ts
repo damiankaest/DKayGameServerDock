@@ -223,6 +223,9 @@ export interface Cs2ModeProfile {
   presetName: string;
   mapName: string;
   workshopId: string | null;
+  workshopTitle: string | null;
+  workshopPreviewUrl: string | null;
+  workshopInstallState: 'local' | 'pending' | 'installed';
   botQuota: number;
   botDifficulty: number;
   overrides: Record<string, string>;
@@ -240,6 +243,37 @@ export interface Cs2ModeState {
   activeProfileId: string | null;
   profiles: Cs2ModeProfile[];
   packages: Cs2ManagedPackageState[];
+  workshop: Cs2WorkshopAccessState;
+}
+
+export interface Cs2WorkshopAccessState {
+  configured: boolean;
+  maskedKey: string | null;
+  protectedFromGameUpdates: boolean;
+  message: string;
+}
+
+export interface Cs2WorkshopMap {
+  publishedFileId: string;
+  title: string;
+  mapName: string;
+  previewUrl: string | null;
+  workshopUrl: string;
+  fileSize: number;
+  subscriptions: number;
+  updatedAt: string | null;
+  tags: string[];
+}
+
+export interface Cs2WorkshopSearchResult {
+  query: string;
+  total: number;
+  items: Cs2WorkshopMap[];
+}
+
+export interface ConfigureCs2WorkshopKeyResult {
+  state: Cs2WorkshopAccessState;
+  message: string;
 }
 
 export interface ApplyCs2ModePresetRequest {
@@ -255,4 +289,58 @@ export interface ApplyCs2ModePresetRequest {
 export interface Cs2ModeApplyResult {
   state: Cs2ModeState;
   queuedPackageIds: string[];
+}
+
+export interface Cs2LiveSetting {
+  key: string;
+  label: string;
+  group: string;
+  type: 'integer' | 'decimal' | 'boolean' | 'select';
+  defaultValue: string;
+  description: string;
+  minimum: number | null;
+  maximum: number | null;
+  step: number | null;
+  options: string[] | null;
+}
+
+export interface Cs2QuickAction {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  icon: string;
+  tone: 'default' | 'primary' | 'danger';
+  requiresPlugin: boolean;
+}
+
+export interface Cs2GsltState {
+  configured: boolean;
+  maskedToken: string | null;
+  protectedFromGameUpdates: boolean;
+  message: string;
+}
+
+export interface Cs2LiveControlState {
+  running: boolean;
+  liveReadSucceeded: boolean;
+  liveReadMessage: string;
+  settings: Cs2LiveSetting[];
+  values: Record<string, string>;
+  actions: Cs2QuickAction[];
+  gslt: Cs2GsltState;
+}
+
+export interface Cs2LiveConfigurationApplyResult {
+  values: Record<string, string>;
+  appliedLive: boolean;
+  message: string;
+  output: string | null;
+}
+
+export interface ConfigureCs2GsltResult {
+  state: Cs2GsltState;
+  appliedLive: boolean;
+  message: string;
+  output: string | null;
 }

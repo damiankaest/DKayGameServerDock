@@ -51,9 +51,10 @@ public sealed class Cs2GameModule(
                 "-port",
                 server.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
-        // Keep this before +map: CS2 only opens its RCON listener after the password is loaded.
+        // Keep this before +map: CS2 only opens its RCON listener and Steam identity after the
+        // protected bootstrap file has loaded. The file is regenerated from .dkay on every start.
         arguments.Add("+exec");
-        arguments.Add("dkay-rcon.cfg");
+        arguments.Add("dkay-bootstrap.cfg");
         if (!string.IsNullOrWhiteSpace(activeProfile?.WorkshopId))
         {
             arguments.Add("+host_workshop_map");
@@ -66,6 +67,10 @@ public sealed class Cs2GameModule(
         }
         arguments.Add("+exec");
         arguments.Add("dkay-server.cfg");
+        // Live Control values intentionally run after the selected map preset so the admin's
+        // explicit runtime overrides remain authoritative across preset and game updates.
+        arguments.Add("+exec");
+        arguments.Add("dkay-live.cfg");
 
         return new ServerLaunchSpec(
             executable,
