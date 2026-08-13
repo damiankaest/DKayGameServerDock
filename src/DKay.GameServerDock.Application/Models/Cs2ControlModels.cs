@@ -48,7 +48,9 @@ public sealed record Cs2MapChangeState(
 
 public sealed record ScheduleCs2MapChangeRequest(string ProfileId, int DelaySeconds);
 
-public sealed record ApplyCs2LiveConfigurationRequest(IReadOnlyDictionary<string, string> Values);
+public sealed record ApplyCs2LiveConfigurationRequest(
+    IReadOnlyDictionary<string, string> Values,
+    IReadOnlyList<string>? ChangedKeys = null);
 
 public sealed record Cs2LiveConfigurationApplyResult(
     IReadOnlyDictionary<string, string> Values,

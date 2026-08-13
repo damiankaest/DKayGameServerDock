@@ -34,4 +34,22 @@ public sealed class Cs2LiveControlServiceTests
         Assert.False(valid);
         Assert.Empty(normalized);
     }
+
+    [Fact]
+    public void Bot_changes_recreate_bots_before_loading_the_live_configuration()
+    {
+        var command = Cs2LiveControlService.BuildLiveApplyCommand(
+            new HashSet<string>(["bot_difficulty"], StringComparer.Ordinal));
+
+        Assert.Equal("bot_kick; exec dkay-live.cfg", command);
+    }
+
+    [Fact]
+    public void Movement_changes_apply_without_disrupting_current_bots()
+    {
+        var command = Cs2LiveControlService.BuildLiveApplyCommand(
+            new HashSet<string>(["sv_autobunnyhopping"], StringComparer.Ordinal));
+
+        Assert.Equal("exec dkay-live.cfg", command);
+    }
 }

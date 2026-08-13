@@ -31,6 +31,8 @@ public sealed partial class Cs2LiveControlService(
         new("remove-bots", "Remove bots", "Kick every bot from the server.", "Bots", "−"),
         new("freeze-bots", "Freeze bots", "Enable cheats and stop bot movement for testing.", "Bots", "❄"),
         new("release-bots", "Release bots", "Allow frozen bots to move again.", "Bots", "☀"),
+        new("enable-bhop", "Enable auto-bhop", "Enable uncapped bunnyhopping and jump automatically while jump is held.", "Movement", "↗", "primary"),
+        new("disable-bhop", "Disable auto-bhop", "Return jumping and the movement speed cap to normal CS2 behavior.", "Movement", "↘"),
         new("rtv", "Start RTV vote", "Ask a compatible CounterStrikeSharp map-vote plugin to start RTV.", "Maps", "☑", RequiresPlugin: true)
     ];
 
@@ -51,6 +53,8 @@ public sealed partial class Cs2LiveControlService(
             ["remove-bots"] = "bot_kick; bot_quota 0",
             ["freeze-bots"] = "sv_cheats 1; bot_stop 1",
             ["release-bots"] = "bot_stop 0",
+            ["enable-bhop"] = "sv_enablebunnyhopping 1; sv_autobunnyhopping 1",
+            ["disable-bhop"] = "sv_autobunnyhopping 0; sv_enablebunnyhopping 0",
             ["rtv"] = "css_rtv"
         };
 
@@ -119,7 +123,22 @@ public sealed partial class Cs2LiveControlService(
         CancellationToken cancellationToken)
     {
         var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        var previousValues = store.ReadLiveSettings(server);
+        var knownKeys = store.SettingDefinitions.Select(setting => setting.Key).ToHashSet(StringComparer.Ordinal);
+        var unknownChangedKey = request.ChangedKeys?.FirstOrDefault(key => !knownKeys.Contains(key));
+        if (unknownChangedKey is not null)
+        {
+            throw new InvalidOperationException($"Live setting '{unknownChangedKey}' is not supported.");
+        }
+
         var values = store.SaveLiveSettings(server, request.Values);
+        var changedKeys = request.ChangedKeys is null
+            ? values.Where(pair => !previousValues.TryGetValue(pair.Key, out var previous) || previous != pair.Value)
+                .Select(pair => pair.Key)
+                .ToHashSet(StringComparer.Ordinal)
+            : request.ChangedKeys.ToHashSet(StringComparer.Ordinal);
+        var liveApplyCommand = BuildLiveApplyCommand(changedKeys);
+        var botsChanged = liveApplyCommand.StartsWith("bot_kick", StringComparison.Ordinal);
         var snapshot = processes.GetSnapshot(server.Id);
         var running = server.Status == ServerStatus.Running && snapshot.IsRunning;
         ConsoleCommandResult? result = null;
@@ -130,11 +149,13 @@ public sealed partial class Cs2LiveControlService(
             result = await adapter.ExecuteConsoleCommandAsync(
                 server,
                 processes,
-                adapter.NormalizeConsoleCommand("exec dkay-live.cfg"),
+                adapter.NormalizeConsoleCommand(liveApplyCommand),
                 cancellationToken);
         }
 
-        var message = running
+        var message = running && botsChanged
+            ? "Live configuration applied. Bots were recreated so quota, movement state and difficulty take effect immediately."
+            : running
             ? "Live configuration applied to the running server and saved for every restart."
             : "Live configuration saved and queued for the next server start.";
         await events.RecordAsync(
@@ -161,13 +182,31 @@ public sealed partial class Cs2LiveControlService(
             _ when ActionCommands.TryGetValue(request.ActionId, out var knownCommand) => knownCommand,
             _ => throw new InvalidOperationException($"Unknown CS2 quick action '{request.ActionId}'.")
         };
-        if (request.ActionId is "kill-bots" or "freeze-bots")
+        if (request.ActionId is "kill-bots" or "freeze-bots" or "release-bots" or "enable-bhop" or "disable-bhop")
         {
             var persistentValues = store.ReadLiveSettings(server).ToDictionary(
                 pair => pair.Key,
                 pair => pair.Value,
                 StringComparer.Ordinal);
-            persistentValues["sv_cheats"] = "1";
+            if (request.ActionId is "kill-bots" or "freeze-bots")
+            {
+                persistentValues["sv_cheats"] = "1";
+            }
+
+            if (request.ActionId == "freeze-bots") persistentValues["bot_stop"] = "1";
+            if (request.ActionId == "release-bots") persistentValues["bot_stop"] = "0";
+            if (request.ActionId == "enable-bhop")
+            {
+                persistentValues["sv_enablebunnyhopping"] = "1";
+                persistentValues["sv_autobunnyhopping"] = "1";
+            }
+
+            if (request.ActionId == "disable-bhop")
+            {
+                persistentValues["sv_autobunnyhopping"] = "0";
+                persistentValues["sv_enablebunnyhopping"] = "0";
+            }
+
             store.SaveLiveSettings(server, persistentValues);
         }
 
@@ -186,6 +225,11 @@ public sealed partial class Cs2LiveControlService(
             cancellationToken);
         return result;
     }
+
+    internal static string BuildLiveApplyCommand(IReadOnlySet<string> changedKeys) =>
+        changedKeys.Overlaps(new[] { "bot_quota", "bot_difficulty", "bot_quota_mode", "bot_stop" })
+            ? "bot_kick; exec dkay-live.cfg"
+            : "exec dkay-live.cfg";
 
     public async Task<Cs2MapChangeState> GetMapChangeStateAsync(
         Guid serverId,

@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
+import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -41,6 +41,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly modeBotDifficulty = signal(1);
   readonly modeCombat = signal<Cs2CombatMode>('team');
   readonly modeAmmo = signal<Cs2AmmoMode>('standard');
+  readonly modeHud = signal<Cs2HudMode>('hidden');
   readonly modeInstallPackages = signal(true);
   readonly modeOverrides = signal<Record<string, string>>({});
   readonly modeSaving = signal(false);
@@ -56,6 +57,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly actioning = signal('');
   readonly liveControl = signal<Cs2LiveControlState | null>(null);
   readonly liveValues = signal<Record<string, string>>({});
+  readonly liveDirtyKeys = signal<string[]>([]);
   readonly liveLoading = signal(false);
   readonly liveSaving = signal(false);
   readonly liveAction = signal('');
@@ -174,6 +176,7 @@ export class ServerDetailComponent implements OnDestroy {
       next: state => {
         this.liveControl.set(state);
         this.liveValues.set({ ...state.values });
+        this.liveDirtyKeys.set([]);
         this.liveMessage.set(state.liveReadMessage);
         this.normalizeLiveGroup();
       },
@@ -291,15 +294,17 @@ export class ServerDetailComponent implements OnDestroy {
   updateLiveValue(key: string, event: Event): void {
     const value = (event.target as HTMLInputElement | HTMLSelectElement).value;
     this.liveValues.update(values => ({ ...values, [key]: value }));
+    this.liveDirtyKeys.update(keys => keys.includes(key) ? keys : [...keys, key]);
   }
 
   applyLiveConfiguration(): void {
     this.error.set('');
     this.liveMessage.set('');
     this.liveSaving.set(true);
-    this.api.applyCs2LiveControl(this.id, this.liveValues()).pipe(finalize(() => this.liveSaving.set(false))).subscribe({
+    this.api.applyCs2LiveControl(this.id, this.liveValues(), this.liveDirtyKeys()).pipe(finalize(() => this.liveSaving.set(false))).subscribe({
       next: result => {
         this.liveValues.set({ ...result.values });
+        this.liveDirtyKeys.set([]);
         this.liveMessage.set(result.message);
         this.appendConsoleMessage(result.message, 'ConfigurationChanged');
         if (result.output) this.appendConsoleMessage(result.output, 'ConsoleOutput');
@@ -412,6 +417,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.selectedPresetId.set(preset.id);
     this.modeCombat.set(preset.defaultCombatMode);
     this.modeAmmo.set(preset.defaultAmmoMode);
+    this.modeHud.set(preset.defaultHudMode);
     this.modeOverrides.set(Object.fromEntries(
       preset.settings.filter(setting => setting.editable).map(setting => [setting.key, setting.defaultValue])
     ));
@@ -425,6 +431,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeBotDifficulty.set(profile.botDifficulty);
     this.modeCombat.set(profile.combatMode);
     this.modeAmmo.set(profile.ammoMode);
+    this.modeHud.set(profile.hudMode);
     this.modeOverrides.update(values => ({ ...values, ...profile.overrides }));
   }
 
@@ -450,6 +457,10 @@ export class ServerDetailComponent implements OnDestroy {
 
   updateModeAmmo(event: Event): void {
     this.modeAmmo.set((event.target as HTMLSelectElement).value as Cs2AmmoMode);
+  }
+
+  updateModeHud(event: Event): void {
+    this.modeHud.set((event.target as HTMLSelectElement).value as Cs2HudMode);
   }
 
   updateWorkshopQuery(event: Event): void {
@@ -531,7 +542,8 @@ export class ServerDetailComponent implements OnDestroy {
       installRecommendedPackages: this.modeInstallPackages(),
       overrides: this.modeOverrides(),
       combatMode: this.modeCombat(),
-      ammoMode: this.modeAmmo()
+      ammoMode: this.modeAmmo(),
+      hudMode: this.modeHud()
     }).pipe(finalize(() => {
       this.modeSaving.set(false);
       this.workshopAdding.set('');

@@ -8,6 +8,7 @@ public static partial class Cs2ModeCatalog
 {
     public static IReadOnlyList<string> CombatModes { get; } = ["peaceful", "team", "ffa"];
     public static IReadOnlyList<string> AmmoModes { get; } = ["standard", "infinite-magazine", "infinite-reserve"];
+    public static IReadOnlyList<string> HudModes { get; } = ["hidden", "timer", "movement"];
 
     public static IReadOnlyList<Cs2ModePresetDescriptor> Presets { get; } =
     [
@@ -35,7 +36,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("sv_enablebunnyhopping", "0", "Automatic bunny hopping disabled.")
             ],
             "team",
-            "standard"),
+            "standard",
+            "hidden"),
         new(
             "surf",
             "Surf",
@@ -64,7 +66,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
             ],
             "peaceful",
-            "standard"),
+            "standard",
+            "movement"),
         new(
             "kz",
             "KZ / Climb",
@@ -93,7 +96,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
             ],
             "peaceful",
-            "standard"),
+            "standard",
+            "movement"),
         new(
             "bhop",
             "Bunny Hop",
@@ -122,7 +126,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_ignore_round_win_conditions", "1", "Do not end active runs on normal win conditions.")
             ],
             "peaceful",
-            "standard"),
+            "standard",
+            "movement"),
         new(
             "scoutzknivez",
             "ScoutzKnivez",
@@ -153,7 +158,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_limitteams", "1", "Prevent heavily stacked combat teams.")
             ],
             "team",
-            "standard"),
+            "standard",
+            "hidden"),
         new(
             "rpg-arena",
             "RPG Arena",
@@ -186,7 +192,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_limitteams", "1", "Prevent one RPG team from becoming heavily stacked.")
             ],
             "team",
-            "standard")
+            "standard",
+            "hidden")
     ];
 
     public static IReadOnlyList<Cs2ManagedPackageDescriptor> Packages { get; } =
@@ -271,6 +278,14 @@ public static partial class Cs2ModeCatalog
             : throw new ArgumentException("Ammo mode must be standard, infinite-magazine or infinite-reserve.");
     }
 
+    public static string ResolveHudMode(Cs2ModePresetDescriptor preset, string? value)
+    {
+        var candidate = string.IsNullOrWhiteSpace(value) ? preset.DefaultHudMode : value.Trim().ToLowerInvariant();
+        return HudModes.Contains(candidate, StringComparer.Ordinal)
+            ? candidate
+            : throw new ArgumentException("SharpTimer HUD mode must be hidden, timer or movement.");
+    }
+
     public static IReadOnlyDictionary<string, string> BuildCombatConVars(string combatMode, string ammoMode)
     {
         if (!CombatModes.Contains(combatMode, StringComparer.Ordinal))
@@ -309,6 +324,28 @@ public static partial class Cs2ModeCatalog
             ["sharptimer_remove_damage"] = combatMode == "peaceful" ? "1" : "0",
             ["sharptimer_apply_infinite_ammo"] = ammoMode == "infinite-magazine" ? "1" : "0"
         };
+
+    public static IReadOnlyDictionary<string, string> BuildSharpTimerHudCommands(string hudMode)
+    {
+        if (!HudModes.Contains(hudMode, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("SharpTimer HUD mode must be hidden, timer or movement.");
+        }
+
+        var timerVisible = hudMode != "hidden" ? "1" : "0";
+        var movementVisible = hudMode == "movement" ? "1" : "0";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sharptimer_enable_timer_hud"] = timerVisible,
+            ["sharptimer_enable_keys_hud"] = movementVisible,
+            ["sharptimer_enable_velocity_hud"] = movementVisible,
+            ["sharptimer_enable_strafesync_hud"] = movementVisible,
+            ["sharptimer_enable_rankicons_hud"] = movementVisible,
+            ["sharptimer_enable_map_tier_hud"] = timerVisible,
+            ["sharptimer_enable_map_type_hud"] = timerVisible,
+            ["sharptimer_enable_map_name_hud"] = timerVisible
+        };
+    }
 
     public static void ValidateMap(string mapName, string? workshopId)
     {

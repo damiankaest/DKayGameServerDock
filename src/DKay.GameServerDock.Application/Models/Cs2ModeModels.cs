@@ -21,7 +21,8 @@ public sealed record Cs2ModePresetDescriptor(
     IReadOnlyList<string> RecommendedPackageIds,
     IReadOnlyList<Cs2ConVarDescriptor> Settings,
     string DefaultCombatMode,
-    string DefaultAmmoMode);
+    string DefaultAmmoMode,
+    string DefaultHudMode);
 
 public sealed record Cs2ManagedPackageDescriptor(
     string Id,
@@ -43,7 +44,8 @@ public sealed record ApplyCs2ModePresetRequest(
     bool InstallRecommendedPackages,
     IReadOnlyDictionary<string, string> Overrides,
     string? CombatMode = null,
-    string? AmmoMode = null);
+    string? AmmoMode = null,
+    string? HudMode = null);
 
 public sealed record Cs2ModeProfile(
     string Id,
@@ -60,7 +62,8 @@ public sealed record Cs2ModeProfile(
     IReadOnlyList<string> RecommendedPackageIds,
     DateTimeOffset UpdatedAt,
     string? CombatMode = null,
-    string? AmmoMode = null);
+    string? AmmoMode = null,
+    string? HudMode = null);
 
 public sealed record Cs2WorkshopAccessState(
     bool Configured,
