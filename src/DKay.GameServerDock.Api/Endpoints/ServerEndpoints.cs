@@ -74,6 +74,22 @@ public static class ServerEndpoints
                 Cs2LiveControlService controls,
                 CancellationToken token) =>
             Results.Ok(await controls.RunActionAsync(id, request, token)));
+        group.MapGet("/{id:guid}/cs2-control/map-change", async (
+                Guid id,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.GetMapChangeStateAsync(id, token)));
+        group.MapPost("/{id:guid}/cs2-control/map-change", async (
+                Guid id,
+                ScheduleCs2MapChangeRequest request,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.ScheduleMapChangeAsync(id, request, token)));
+        group.MapDelete("/{id:guid}/cs2-control/map-change", async (
+                Guid id,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.CancelMapChangeAsync(id, token)));
         group.MapPut("/{id:guid}/cs2-control/gslt", async (
                 Guid id,
                 ConfigureCs2GsltRequest request,
@@ -287,6 +303,7 @@ public static class ServerEndpoints
     private static async Task<IResult> PublicServersAsync(
         IServerRepository servers,
         IGameModuleRegistry modules,
+        IProcessSupervisor processes,
         ICs2ModeManager cs2Modes,
         DockOptions dockOptions,
         CancellationToken cancellationToken)
@@ -304,40 +321,73 @@ public static class ServerEndpoints
         }
 
         var items = await servers.ListAsync(cancellationToken);
-        var publishedServers = items
+        var publishedItems = items
             .Select(server => new { Server = server, Publication = ServerPublicationSettings.Read(server) })
             .Where(item => item.Publication.Published)
-            .Select(item =>
+            .ToArray();
+        var publishedServers = await Task.WhenAll(publishedItems.Select(async item =>
+        {
+            var module = modules.GetRequired(item.Server.TemplateId);
+            var descriptor = module.Descriptor;
+            var snapshot = processes.GetSnapshot(item.Server.Id);
+            IReadOnlyList<PlayerInfo> players = [];
+            string? currentMap = null;
+            if (item.Server.Status == ServerStatus.Running && snapshot.IsRunning)
             {
-                var descriptor = modules.GetRequired(item.Server.TemplateId).Descriptor;
-                var activeMode = item.Server.TemplateId == "counter-strike-2"
-                    ? cs2Modes.GetActiveProfile(item.Server)
-                    : null;
-                var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(item.Server.SettingsJson) ?? [];
-                var passwordProtected = descriptor.Settings
-                    .Where(setting => setting.Secret)
-                    .Any(setting => settings.TryGetValue(setting.Key, out var value) && !string.IsNullOrWhiteSpace(value));
-                var maxPlayers = settings.TryGetValue("maxPlayers", out var maxPlayersValue) &&
-                                 int.TryParse(maxPlayersValue, out var parsedMaxPlayers)
-                    ? parsedMaxPlayers
-                    : (int?)null;
-
-                return new
+                try
                 {
-                    item.Server.Name,
-                    TemplateName = descriptor.Name,
-                    TemplateIcon = descriptor.Icon,
-                    Status = item.Server.Status.ToString(),
-                    JoinAddress = FormatHostPort(dockOptions.PublicHost, item.Publication.PublicPort),
-                    PublicPort = item.Publication.PublicPort,
-                    Protocols = descriptor.NetworkProtocols,
-                    PasswordProtected = passwordProtected,
-                    MaxPlayers = maxPlayers,
-                    Mode = activeMode?.PresetName,
-                    Map = activeMode?.MapName,
-                    item.Server.UpdatedAt
-                };
-            })
+                    players = await module.Adapter.GetPlayersAsync(item.Server, cancellationToken);
+                    currentMap = await module.Adapter.GetCurrentMapAsync(item.Server, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Public presence data is best effort. A transient game-query failure must not
+                    // hide the published server or its join address from guests.
+                }
+            }
+
+            var activeMode = item.Server.TemplateId == "counter-strike-2"
+                ? cs2Modes.GetActiveProfile(item.Server)
+                : null;
+            var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(item.Server.SettingsJson) ?? [];
+            var passwordProtected = descriptor.Settings
+                .Where(setting => setting.Secret)
+                .Any(setting => settings.TryGetValue(setting.Key, out var value) && !string.IsNullOrWhiteSpace(value));
+            var maxPlayers = settings.TryGetValue("maxPlayers", out var maxPlayersValue) &&
+                             int.TryParse(maxPlayersValue, out var parsedMaxPlayers)
+                ? parsedMaxPlayers
+                : (int?)null;
+            var humanPlayers = players
+                .Where(player => !player.Id.StartsWith("BOT:", StringComparison.OrdinalIgnoreCase))
+                .Select(player => new
+                {
+                    player.Name,
+                    player.Ping,
+                    ConnectedFor = player.ConnectionTime
+                })
+                .ToArray();
+
+            return new
+            {
+                item.Server.Name,
+                TemplateName = descriptor.Name,
+                TemplateIcon = descriptor.Icon,
+                Status = item.Server.Status.ToString(),
+                JoinAddress = FormatHostPort(dockOptions.PublicHost, item.Publication.PublicPort),
+                PublicPort = item.Publication.PublicPort,
+                Protocols = descriptor.NetworkProtocols,
+                PasswordProtected = passwordProtected,
+                MaxPlayers = maxPlayers,
+                PlayerCount = humanPlayers.Length,
+                BotCount = players.Count - humanPlayers.Length,
+                Players = humanPlayers,
+                Mode = activeMode?.PresetName,
+                Map = currentMap ?? activeMode?.MapName,
+                item.Server.UpdatedAt
+            };
+        }));
+
+        publishedServers = publishedServers
             .OrderBy(server => server.Name)
             .ToArray();
 

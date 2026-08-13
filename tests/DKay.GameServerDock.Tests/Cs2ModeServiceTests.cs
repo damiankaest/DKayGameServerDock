@@ -45,6 +45,8 @@ public sealed class Cs2ModeServiceTests
             throw new NotSupportedException();
         public Task<Cs2ModeState> ApplyPresetAsync(GameServerInstance server, ApplyCs2ModePresetRequest request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Task<Cs2ModeProfile> ActivateProfileAsync(GameServerInstance server, string profileId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server) =>
             new(false, null, false, "not configured");
         public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key) =>

@@ -17,6 +17,7 @@ export class ServerDetailComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly id = inject(ActivatedRoute).snapshot.paramMap.get('id')!;
   private readonly refreshTimer: ReturnType<typeof setInterval>;
+  private readonly countdownTimer: ReturnType<typeof setInterval>;
   readonly server = signal<GameServer | null>(null);
   readonly logs = signal<ServerEvent[]>([]);
   readonly logsLoading = signal(true);
@@ -57,7 +58,11 @@ export class ServerDetailComponent implements OnDestroy {
   readonly liveSaving = signal(false);
   readonly liveAction = signal('');
   readonly liveMessage = signal('');
-  readonly liveMap = signal('de_mirage');
+  readonly liveEditorView = signal<'recommended' | 'all'>('recommended');
+  readonly nextMapProfileId = signal('');
+  readonly nextMapDelaySeconds = signal(60);
+  readonly mapChangeAction = signal('');
+  readonly mapClock = signal(Date.now());
   readonly gsltToken = signal('');
   readonly gsltSaving = signal(false);
 
@@ -84,10 +89,12 @@ export class ServerDetailComponent implements OnDestroy {
       }
     }).catch(() => this.error.set('Live updates are temporarily unavailable.'));
     this.refreshTimer = setInterval(() => this.loadServer(), 5000);
+    this.countdownTimer = setInterval(() => this.mapClock.set(Date.now()), 1000);
   }
 
   ngOnDestroy(): void {
     clearInterval(this.refreshTimer);
+    clearInterval(this.countdownTimer);
     void this.realtime.disconnect();
   }
 
@@ -119,6 +126,8 @@ export class ServerDetailComponent implements OnDestroy {
         this.modeCatalog.set(result.catalog);
         this.modeState.set(result.state);
         const active = result.state.profiles.find(profile => profile.id === result.state.activeProfileId);
+        if (!this.nextMapProfileId() && active) this.nextMapProfileId.set(active.id);
+        else if (!this.nextMapProfileId() && result.state.profiles.length) this.nextMapProfileId.set(result.state.profiles[0].id);
         if (active) {
           this.selectProfile(active);
         } else if (!this.selectedPresetId() && result.catalog.presets.length) {
@@ -158,19 +167,32 @@ export class ServerDetailComponent implements OnDestroy {
         this.liveControl.set(state);
         this.liveValues.set({ ...state.values });
         this.liveMessage.set(state.liveReadMessage);
-        const currentMap = this.server()?.currentMap || this.server()?.settings?.['initialMap'];
-        if (currentMap) this.liveMap.set(currentMap);
       },
       error: error => this.error.set(error.error?.detail ?? 'The CS2 live configuration could not be loaded.')
     });
   }
 
   liveGroups(): string[] {
-    return [...new Set(this.liveControl()?.settings.map(setting => setting.group) ?? [])];
+    return [...new Set(this.visibleLiveSettings().map(setting => setting.group))];
   }
 
   liveSettingsFor(group: string): Cs2LiveSetting[] {
-    return this.liveControl()?.settings.filter(setting => setting.group === group) ?? [];
+    return this.visibleLiveSettings().filter(setting => setting.group === group);
+  }
+
+  livePresetName(): string {
+    return this.modeCatalog()?.presets.find(preset => preset.id === this.activeModeProfile()?.presetId)?.name ?? 'this server';
+  }
+
+  private visibleLiveSettings(): Cs2LiveSetting[] {
+    const settings = this.liveControl()?.settings ?? [];
+    if (this.liveEditorView() === 'all') return settings;
+
+    const presetId = this.activeModeProfile()?.presetId ?? 'classic';
+    const relevantGroups = presetId === 'surf' || presetId === 'kz' || presetId === 'bhop'
+      ? new Set(['Round & match', 'Teams & bots', 'Movement & physics'])
+      : new Set(['Round & match', 'Teams & bots', 'Admin playground']);
+    return settings.filter(setting => relevantGroups.has(setting.group));
   }
 
   liveActionGroups(): string[] {
@@ -205,16 +227,6 @@ export class ServerDetailComponent implements OnDestroy {
     this.executeLiveAction(action.id, action.label);
   }
 
-  changeLiveMap(): void {
-    const map = this.liveMap().trim();
-    if (!map) return;
-    this.executeLiveAction('change-map', `Change map to ${map}`, map);
-  }
-
-  updateLiveMap(event: Event): void {
-    this.liveMap.set((event.target as HTMLInputElement).value);
-  }
-
   updateGsltToken(event: Event): void {
     this.gsltToken.set((event.target as HTMLInputElement).value.trim());
   }
@@ -243,6 +255,70 @@ export class ServerDetailComponent implements OnDestroy {
   activeModeProfile(): Cs2ModeProfile | null {
     const state = this.modeState();
     return state?.profiles.find(profile => profile.id === state.activeProfileId) ?? null;
+  }
+
+  isProfileLive(profile: Cs2ModeProfile | null): boolean {
+    const currentMap = this.server()?.currentMap?.trim().toLowerCase();
+    return !!profile && !!currentMap && currentMap === profile.mapName.trim().toLowerCase();
+  }
+
+  updateNextMapProfile(event: Event): void {
+    this.nextMapProfileId.set((event.target as HTMLSelectElement).value);
+  }
+
+  updateNextMapDelay(event: Event): void {
+    this.nextMapDelaySeconds.set(Number((event.target as HTMLSelectElement).value));
+  }
+
+  scheduleMapChange(): void {
+    const profileId = this.nextMapProfileId();
+    if (!profileId) return;
+    this.error.set('');
+    this.mapChangeAction.set('schedule');
+    this.api.scheduleCs2MapChange(this.id, profileId, this.nextMapDelaySeconds())
+      .pipe(finalize(() => this.mapChangeAction.set('')))
+      .subscribe({
+        next: mapChange => {
+          this.liveControl.update(control => control ? { ...control, mapChange } : control);
+          this.liveMessage.set(mapChange.message);
+        },
+        error: error => this.error.set(error.error?.detail ?? 'The map change could not be scheduled.')
+      });
+  }
+
+  cancelMapChange(): void {
+    this.error.set('');
+    this.mapChangeAction.set('cancel');
+    this.api.cancelCs2MapChange(this.id)
+      .pipe(finalize(() => this.mapChangeAction.set('')))
+      .subscribe({
+        next: mapChange => {
+          this.liveControl.update(control => control ? { ...control, mapChange } : control);
+          this.liveMessage.set(mapChange.message);
+        },
+        error: error => this.error.set(error.error?.detail ?? 'The scheduled map change could not be cancelled.')
+      });
+  }
+
+  mapChangeRemaining(): number {
+    this.mapClock();
+    const executeAt = this.liveControl()?.mapChange.executeAt;
+    return executeAt ? Math.max(0, Math.ceil((new Date(executeAt).getTime() - Date.now()) / 1000)) : 0;
+  }
+
+  formatCountdown(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return minutes > 0 ? `${minutes}:${remainder.toString().padStart(2, '0')}` : `${remainder}s`;
+  }
+
+  private refreshMapChangeState(): void {
+    this.api.cs2MapChange(this.id).subscribe({
+      next: mapChange => {
+        this.liveControl.update(control => control ? { ...control, mapChange } : control);
+        if (mapChange.status === 'completed') this.refreshCs2ModeState();
+      }
+    });
   }
 
   selectPreset(presetId: string): void {
@@ -399,10 +475,11 @@ export class ServerDetailComponent implements OnDestroy {
           running: server.status === 'Running' && server.process.isRunning
         } : control);
         if (this.publicationPort() === null) this.publicationPort.set(server.publication.publicPort);
+        if (this.tab() === 'control' && this.liveControl()) this.refreshMapChangeState();
         if (loadModes && server.templateId === 'counter-strike-2') this.loadCs2Modes();
         else if (server.templateId === 'counter-strike-2' && this.modeState() &&
           (this.tab() === 'modes' ||
-            (server.status === 'Running' && this.activeModeProfile()?.workshopInstallState === 'pending'))) {
+            (server.status === 'Running' && this.activeModeProfile()?.workshopInstallState === 'pending' && !this.isProfileLive(this.activeModeProfile())))) {
           this.refreshCs2ModeState();
         }
       },

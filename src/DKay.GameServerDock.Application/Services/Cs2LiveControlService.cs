@@ -10,6 +10,8 @@ public sealed partial class Cs2LiveControlService(
     IGameModuleRegistry modules,
     IProcessSupervisor processes,
     ICs2RuntimeControlStore store,
+    ICs2ModeManager modes,
+    ICs2MapChangeScheduler mapChanges,
     IServerEventSink events,
     IClock clock)
 {
@@ -182,6 +184,51 @@ public sealed partial class Cs2LiveControlService(
         return result;
     }
 
+    public async Task<Cs2MapChangeState> GetMapChangeStateAsync(
+        Guid serverId,
+        CancellationToken cancellationToken)
+    {
+        _ = await GetCs2ServerAsync(serverId, cancellationToken);
+        return mapChanges.GetState(serverId);
+    }
+
+    public async Task<Cs2MapChangeState> ScheduleMapChangeAsync(
+        Guid serverId,
+        ScheduleCs2MapChangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        var snapshot = processes.GetSnapshot(server.Id);
+        if (server.Status != ServerStatus.Running || !snapshot.IsRunning)
+        {
+            throw new InvalidOperationException("Start the CS2 server before scheduling a map change.");
+        }
+
+        int[] allowedDelays = [0, 10, 30, 60, 120, 300];
+        if (!allowedDelays.Contains(request.DelaySeconds))
+        {
+            throw new InvalidOperationException("Choose a map-change delay of 0, 10, 30, 60, 120 or 300 seconds.");
+        }
+
+        var modeState = await modes.GetStateAsync(server, cancellationToken);
+        var profile = modeState.Profiles.FirstOrDefault(item =>
+            string.Equals(item.Id, request.ProfileId, StringComparison.Ordinal))
+            ?? throw new KeyNotFoundException($"CS2 map profile '{request.ProfileId}' was not found.");
+        return await mapChanges.ScheduleAsync(
+            server,
+            profile,
+            TimeSpan.FromSeconds(request.DelaySeconds),
+            cancellationToken);
+    }
+
+    public async Task<Cs2MapChangeState> CancelMapChangeAsync(
+        Guid serverId,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        return await mapChanges.CancelAsync(server, cancellationToken);
+    }
+
     public async Task<ConfigureCs2GsltResult> ConfigureGsltAsync(
         Guid serverId,
         ConfigureCs2GsltRequest request,
@@ -223,7 +270,8 @@ public sealed partial class Cs2LiveControlService(
             store.SettingDefinitions,
             values,
             ActionDescriptors,
-            store.GetGsltState(server));
+            store.GetGsltState(server),
+            mapChanges.GetState(server.Id));
 
     private async Task<GameServerInstance> GetCs2ServerAsync(Guid serverId, CancellationToken cancellationToken)
     {

@@ -14,6 +14,10 @@ public interface ICs2ModeManager
         GameServerInstance server,
         ApplyCs2ModePresetRequest request,
         CancellationToken cancellationToken);
+    Task<Cs2ModeProfile> ActivateProfileAsync(
+        GameServerInstance server,
+        string profileId,
+        CancellationToken cancellationToken);
     Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server);
     Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key);
     Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(

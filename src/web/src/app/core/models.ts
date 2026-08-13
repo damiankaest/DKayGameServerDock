@@ -86,9 +86,18 @@ export interface PublicServer {
   protocols: string[];
   passwordProtected: boolean;
   maxPlayers: number | null;
+  playerCount: number;
+  botCount: number;
+  players: PublicPlayer[];
   mode: string | null;
   map: string | null;
   updatedAt: string;
+}
+
+export interface PublicPlayer {
+  name: string;
+  ping: number | null;
+  connectedFor: string | null;
 }
 
 export interface PublicServerList {
@@ -329,6 +338,17 @@ export interface Cs2LiveControlState {
   values: Record<string, string>;
   actions: Cs2QuickAction[];
   gslt: Cs2GsltState;
+  mapChange: Cs2MapChangeState;
+}
+
+export interface Cs2MapChangeState {
+  status: 'idle' | 'scheduled' | 'changing' | 'completed' | 'failed';
+  profileId: string | null;
+  mapName: string | null;
+  workshopId: string | null;
+  executeAt: string | null;
+  remainingSeconds: number;
+  message: string;
 }
 
 export interface Cs2LiveConfigurationApplyResult {

@@ -61,7 +61,7 @@
           <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
         </section>
 
-        @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed') {
+        @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed' && !isProfileLive(activeModeProfile())) {
           <div class="workshop-download-state full">
             <span aria-hidden="true"></span>
             <div><b>Workshop map is downloading or being verified.</b><p>This is expected on the first start. Keep CS2 running; the Hub checks the server cache every five seconds. Watch Console for UGC or Workshop messages. Only stop and troubleshoot if the state does not change and CS2 reports a download error.</p></div>
@@ -173,7 +173,7 @@
               <header><div><p class="eyebrow">PER-MAP PROFILES</p><h2>Configured maps</h2></div><small>{{ state.profiles.length }} saved</small></header>
               <div class="profile-list">
                 @for (profile of state.profiles; track profile.id) {
-                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.workshopTitle || profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? (profile.workshopInstallState === 'installed' ? 'Workshop installed' : 'Workshop downloads on start') : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
+                  <button type="button" [class.active]="profile.id === state.activeProfileId" (click)="selectProfile(profile)"><span><strong>{{ profile.workshopTitle || profile.mapName }}</strong><small>{{ profile.presetName }} · {{ profile.workshopId ? (isProfileLive(profile) ? 'Workshop live' : profile.workshopInstallState === 'installed' ? 'Workshop installed' : 'Workshop downloads on start') : 'local map' }}</small></span><b>{{ profile.id === state.activeProfileId ? 'ACTIVE' : 'EDIT' }}</b></button>
                 } @empty { <div class="empty-state compact"><h3>No map profiles yet</h3><p>Pick a preset above and apply it to your first map.</p></div> }
               </div>
             </section>
@@ -236,12 +236,27 @@
           </section>
 
           <section class="panel live-map-panel">
-            <header><div><p class="eyebrow">MAP CONTROL</p><h2>Change map now</h2></div><span>LIVE</span></header>
-            <p>Enter a stock or already installed Workshop map name. Players remain connected while CS2 changes level.</p>
-            <div class="live-inline-form">
-              <input maxlength="64" placeholder="de_mirage" [value]="liveMap()" (input)="updateLiveMap($event)" />
-              <button class="primary-button" type="button" [disabled]="!control.running || liveAction() !== '' || !liveMap().trim()" (click)="changeLiveMap()">{{ liveAction() === 'change-map' ? 'Changing…' : 'Change map' }}</button>
+            <header><div><p class="eyebrow">MAP DIRECTOR</p><h2>Schedule the next map</h2></div><span>NO RESTART</span></header>
+            <p>Choose one of your configured Stock or Workshop maps. DKay announces the countdown in-game, changes the level and applies that map's saved preset.</p>
+            @if (control.mapChange.status !== 'idle') {
+              <div class="map-change-status" [attr.data-state]="control.mapChange.status">
+                <span>{{ control.mapChange.status === 'scheduled' ? formatCountdown(mapChangeRemaining()) : control.mapChange.status === 'changing' ? '…' : control.mapChange.status === 'completed' ? '✓' : '!' }}</span>
+                <div><strong>{{ control.mapChange.mapName }}</strong><small>{{ control.mapChange.message }}</small></div>
+                @if (control.mapChange.status === 'scheduled') { <button class="danger-button small" type="button" [disabled]="mapChangeAction() !== ''" (click)="cancelMapChange()">{{ mapChangeAction() === 'cancel' ? 'Cancelling…' : 'Cancel' }}</button> }
+              </div>
+            }
+            <div class="map-schedule-form">
+              <label>Next map
+                <select [value]="nextMapProfileId()" (change)="updateNextMapProfile($event)">
+                  @for (profile of modeState()?.profiles || []; track profile.id) { <option [value]="profile.id">{{ profile.workshopId ? 'Workshop · ' : 'Stock · ' }}{{ profile.workshopTitle || profile.mapName }}</option> }
+                </select>
+              </label>
+              <label>Countdown
+                <select [value]="nextMapDelaySeconds()" (change)="updateNextMapDelay($event)"><option value="0">Now</option><option value="10">10 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option><option value="300">5 minutes</option></select>
+              </label>
+              <button class="primary-button" type="button" [disabled]="!control.running || mapChangeAction() !== '' || !nextMapProfileId()" (click)="scheduleMapChange()">{{ mapChangeAction() === 'schedule' ? 'Scheduling…' : nextMapDelaySeconds() === 0 ? 'Change now' : 'Set next map' }}</button>
             </div>
+            @if (!(modeState()?.profiles?.length)) { <p class="readiness-note">Add a Stock or Workshop map under <b>Modes & maps</b> first.</p> }
           </section>
 
           <section class="panel gslt-panel" [class.configured]="control.gslt.configured">
@@ -260,6 +275,13 @@
               <div><p class="eyebrow">LIVE CONFIGURATION</p><h2>Runtime settings</h2><p>{{ control.liveReadMessage }}</p></div>
               <button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply to live server' : 'Save for next start' }}</button>
             </header>
+            <div class="live-editor-toolbar">
+              <div><strong>{{ livePresetName() }} controls</strong><small>{{ liveEditorView() === 'recommended' ? 'Showing the settings that matter for this preset.' : 'Showing every supported CS2 runtime value.' }}</small></div>
+              <div class="live-editor-switch" role="group" aria-label="Live configuration detail level">
+                <button type="button" [class.active]="liveEditorView() === 'recommended'" (click)="liveEditorView.set('recommended')">Recommended</button>
+                <button type="button" [class.active]="liveEditorView() === 'all'" (click)="liveEditorView.set('all')">All / advanced</button>
+              </div>
+            </div>
             <div class="live-setting-groups">
               @for (group of liveGroups(); track group) {
                 <section class="live-setting-group">
@@ -300,7 +322,7 @@
         <form (submit)="$event.preventDefault(); sendCommand()"><span>›</span><input placeholder="Enter server command" [value]="command()" (input)="updateCommand($event)" [disabled]="current.status !== 'Running' || commandAction() !== ''" /><button type="submit" [disabled]="current.status !== 'Running' || commandAction() !== ''">{{ commandAction() === 'custom' ? 'Sending…' : 'Send' }}</button></form>
       </section>
     } @else {
-      <section class="panel"><header><h2>Connected players</h2><span class="muted">Adapter capability</span></header><div class="player-list">@for (player of current.players; track player.id) { <div><span class="avatar">{{ player.name[0] }}</span><strong>{{ player.name }}</strong><code>{{ player.id }}</code><small>{{ player.ping ?? '—' }} ms</small></div> } @empty { <div class="empty-state compact"><h3>No players reported</h3><p>The initial adapters expose the extension point; query/RCON player discovery follows next.</p></div> }</div></section>
+      <section class="panel"><header><h2>Connected players</h2><span class="muted">Live from CS2</span></header><div class="player-list">@for (player of current.players; track player.id) { <div><span class="avatar">{{ player.name[0] }}</span><strong>{{ player.name }}</strong><code>{{ player.id }}</code><small>{{ player.ping ?? '—' }} ms</small></div> } @empty { <div class="empty-state compact"><h3>No players connected</h3><p>CS2 is not reporting any human players or bots at the moment.</p></div> }</div></section>
     }
   } @else {
     <div class="skeleton-block tall"></div>
