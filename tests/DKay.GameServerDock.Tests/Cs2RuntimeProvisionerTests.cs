@@ -250,6 +250,37 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
+    public void Workshop_launch_cfg_runs_after_source2_init_without_exposing_the_api_key()
+    {
+        const string key = "0123456789abcdef0123456789abcdef";
+        const string publishedFileId = "3076153623";
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            provisioner.SaveWorkshopApiKey(server, key);
+            provisioner.WriteWorkshopLaunchConfiguration(server, publishedFileId);
+
+            var launchConfig = File.ReadAllText(Path.Combine(root, "game", "csgo", "cfg", "dkay-workshop-start.cfg"));
+            Assert.Contains($"DKAY_WORKSHOP_REQUEST {publishedFileId}", launchConfig, StringComparison.Ordinal);
+            Assert.Contains($"host_workshop_map {publishedFileId}", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("sv_debug_ugc_downloads 1", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("exec dkay-server.cfg", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("exec dkay-live.cfg", launchConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain(key, launchConfig, StringComparison.Ordinal);
+            Assert.Throws<InvalidOperationException>(() =>
+                provisioner.WriteWorkshopLaunchConfiguration(server, "3076153623;quit"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Authenticates_and_executes_a_local_rcon_command()
     {
         var root = CreateTemporaryDirectory();
