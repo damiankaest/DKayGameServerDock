@@ -201,6 +201,50 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
+    public void Applying_a_preset_aligns_only_overlapping_persisted_live_settings()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            provisioner.SaveLiveSettings(server, new Dictionary<string, string>
+            {
+                ["sv_cheats"] = "1",
+                ["mp_friendlyfire"] = "0",
+                ["mp_respawn_on_death_ct"] = "0",
+                ["mp_respawn_on_death_t"] = "0"
+            });
+
+            provisioner.AlignPersistedLiveSettingsWithPreset(server, new Dictionary<string, string>
+            {
+                ["mp_friendlyfire"] = "1",
+                ["mp_respawn_on_death_ct"] = "1",
+                ["mp_respawn_on_death_t"] = "1",
+                ["unsupported_preset_value"] = "1"
+            });
+
+            var settings = provisioner.ReadLiveSettings(server);
+            Assert.Equal("1", settings["mp_friendlyfire"]);
+            Assert.Equal("1", settings["mp_respawn_on_death_ct"]);
+            Assert.Equal("1", settings["mp_respawn_on_death_t"]);
+            Assert.Equal("1", settings["sv_cheats"]);
+            Assert.DoesNotContain("unsupported_preset_value", settings.Keys);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Steam_workshop_key_is_masked_and_survives_generated_file_replacement()
     {
         if (OperatingSystem.IsWindows())

@@ -34,7 +34,19 @@ public sealed record Cs2LiveControlState(
     IReadOnlyList<Cs2LiveSettingDescriptor> Settings,
     IReadOnlyDictionary<string, string> Values,
     IReadOnlyList<Cs2QuickActionDescriptor> Actions,
-    Cs2GsltState Gslt);
+    Cs2GsltState Gslt,
+    Cs2MapChangeState MapChange);
+
+public sealed record Cs2MapChangeState(
+    string Status,
+    string? ProfileId,
+    string? MapName,
+    string? WorkshopId,
+    DateTimeOffset? ExecuteAt,
+    int RemainingSeconds,
+    string Message);
+
+public sealed record ScheduleCs2MapChangeRequest(string ProfileId, int DelaySeconds);
 
 public sealed record ApplyCs2LiveConfigurationRequest(IReadOnlyDictionary<string, string> Values);
 

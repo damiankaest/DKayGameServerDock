@@ -39,11 +39,24 @@
               <span class="status large" [attr.data-status]="server.status">{{ server.status }}</span>
             </header>
             <dl>
-              @if (server.mode || server.map) { <div><dt>Mode / map</dt><dd>{{ server.mode || 'Custom' }} · {{ server.map || 'rotation' }}</dd></div> }
+              @if (server.mode) { <div><dt>Mode</dt><dd>{{ server.mode }}</dd></div> }
+              <div><dt>Current map</dt><dd class="guest-current-map"><i></i>{{ server.map || (server.status === 'Running' ? 'Detecting…' : '—') }}</dd></div>
               <div><dt>Network</dt><dd>{{ server.protocols.join(' + ') }} · port {{ server.publicPort }}</dd></div>
-              <div><dt>Player slots</dt><dd>{{ server.maxPlayers || 'Game default' }}</dd></div>
+              <div><dt>Players</dt><dd>{{ server.playerCount }}{{ server.maxPlayers ? ' / ' + server.maxPlayers : '' }} @if (server.botCount) { <small>+ {{ server.botCount }} bot{{ server.botCount === 1 ? '' : 's' }}</small> }</dd></div>
               <div><dt>Access</dt><dd>{{ server.passwordProtected ? 'Password required' : 'Open to friends' }}</dd></div>
             </dl>
+            <section class="guest-player-presence">
+              <header><span><i></i> Who is playing</span><small>{{ server.playerCount }} connected</small></header>
+              @if (server.players.length) {
+                <div class="guest-player-chips">
+                  @for (player of server.players; track $index) {
+                    <span><b>{{ player.name[0] }}</b><em><strong>{{ player.name }}</strong><small>{{ formatConnected(player.connectedFor) }}{{ player.ping !== null ? ' · ' + player.ping + ' ms' : '' }}</small></em></span>
+                  }
+                </div>
+              } @else {
+                <p>{{ server.status === 'Running' ? 'No friends have joined yet — be the first.' : 'Player presence appears when the server is online.' }}</p>
+              }
+            </section>
             <div class="guest-connect-hint"><small>GAME CONSOLE</small><code>connect {{ server.joinAddress }}</code></div>
             <button class="copy-address" type="button" [disabled]="server.status !== 'Running'" (click)="copy(server.joinAddress)">
               <span><small>SERVER ADDRESS</small><code>{{ server.joinAddress }}</code></span>

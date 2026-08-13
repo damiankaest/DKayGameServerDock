@@ -22,6 +22,12 @@ public static partial class Cs2ModeCatalog
                 Integer("mp_warmuptime", "Warmup time", "60", 0, 600, "Warmup length in seconds."),
                 Boolean("mp_autoteambalance", "Auto team balance", "1", "Keep teams balanced."),
                 Integer("mp_limitteams", "Team difference limit", "2", 0, 10, "Maximum team size difference."),
+                Fixed("mp_friendlyfire", "0", "Prevent accidental damage to teammates."),
+                Fixed("mp_teammates_are_enemies", "0", "Use normal team targeting."),
+                Fixed("mp_solid_teammates", "1", "Use normal teammate collision."),
+                Fixed("mp_respawn_on_death_t", "0", "Use normal round-based Terrorist spawns."),
+                Fixed("mp_respawn_on_death_ct", "0", "Use normal round-based Counter-Terrorist spawns."),
+                Fixed("mp_ignore_round_win_conditions", "0", "Use normal bomb, hostage and elimination win conditions."),
                 Fixed("sv_airaccelerate", "12", "Valve-style air acceleration."),
                 Fixed("sv_enablebunnyhopping", "0", "Automatic bunny hopping disabled.")
             ]),
@@ -42,6 +48,13 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_freezetime", "0", "No freeze time."),
                 Fixed("mp_autoteambalance", "0", "Movement servers do not auto-balance."),
                 Fixed("mp_limitteams", "0", "No team-size restriction."),
+                Fixed("mp_friendlyfire", "0", "Runs cannot be interrupted by teammate damage."),
+                Fixed("mp_teammates_are_enemies", "0", "Movement players remain non-hostile teammates."),
+                Fixed("mp_solid_teammates", "0", "Players cannot body-block a surf line."),
+                Fixed("mp_respawn_on_death_t", "1", "Respawn Terrorists after a failed run."),
+                Fixed("mp_respawn_on_death_ct", "1", "Respawn Counter-Terrorists after a failed run."),
+                Fixed("mp_respawn_immunitytime", "0", "Do not retain combat immunity on movement maps."),
+                Fixed("mp_ignore_round_win_conditions", "1", "Do not end active surf runs on normal win conditions."),
                 Fixed("sv_enablebunnyhopping", "1", "Bunny hopping enabled."),
                 Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
             ]),
@@ -62,6 +75,13 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_freezetime", "0", "No freeze time."),
                 Fixed("mp_autoteambalance", "0", "No automatic team changes."),
                 Fixed("mp_limitteams", "0", "No team-size restriction."),
+                Fixed("mp_friendlyfire", "0", "Climbers cannot damage one another."),
+                Fixed("mp_teammates_are_enemies", "0", "Climbers remain non-hostile teammates."),
+                Fixed("mp_solid_teammates", "0", "Players cannot body-block a climb."),
+                Fixed("mp_respawn_on_death_t", "1", "Respawn Terrorists after a failed climb."),
+                Fixed("mp_respawn_on_death_ct", "1", "Respawn Counter-Terrorists after a failed climb."),
+                Fixed("mp_respawn_immunitytime", "0", "Do not retain combat immunity on climb maps."),
+                Fixed("mp_ignore_round_win_conditions", "1", "Do not end active climbs on normal win conditions."),
                 Fixed("sv_enablebunnyhopping", "1", "Bunny hopping enabled."),
                 Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
             ]),
@@ -83,7 +103,14 @@ public static partial class Cs2ModeCatalog
                 Fixed("sv_enablebunnyhopping", "1", "Bunny hopping enabled."),
                 Fixed("mp_freezetime", "0", "No freeze time."),
                 Fixed("mp_autoteambalance", "0", "No automatic team changes."),
-                Fixed("mp_limitteams", "0", "No team-size restriction.")
+                Fixed("mp_limitteams", "0", "No team-size restriction."),
+                Fixed("mp_friendlyfire", "0", "Runners cannot damage one another."),
+                Fixed("mp_teammates_are_enemies", "0", "Runners remain non-hostile teammates."),
+                Fixed("mp_solid_teammates", "0", "Players cannot body-block a bhop line."),
+                Fixed("mp_respawn_on_death_t", "1", "Respawn Terrorists after a failed run."),
+                Fixed("mp_respawn_on_death_ct", "1", "Respawn Counter-Terrorists after a failed run."),
+                Fixed("mp_respawn_immunitytime", "0", "Do not retain combat immunity on movement maps."),
+                Fixed("mp_ignore_round_win_conditions", "1", "Do not end active runs on normal win conditions.")
             ]),
         new(
             "scoutzknivez",
@@ -105,7 +132,14 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_t_default_primary", "weapon_ssg08", "Terrorists spawn with an SSG 08."),
                 Fixed("mp_ct_default_primary", "weapon_ssg08", "Counter-Terrorists spawn with an SSG 08."),
                 Fixed("mp_t_default_secondary", "", "No default pistol."),
-                Fixed("mp_ct_default_secondary", "", "No default pistol.")
+                Fixed("mp_ct_default_secondary", "", "No default pistol."),
+                Fixed("mp_friendlyfire", "0", "Use normal team-vs-team damage rules."),
+                Fixed("mp_teammates_are_enemies", "0", "Keep ScoutzKnivez as team combat."),
+                Fixed("mp_solid_teammates", "0", "Teammates cannot block low-gravity jumps."),
+                Fixed("mp_respawn_immunitytime", "0", "Players can fight immediately after respawning."),
+                Fixed("mp_ignore_round_win_conditions", "1", "Keep the respawn arena running."),
+                Fixed("mp_autoteambalance", "1", "Keep combat teams balanced."),
+                Fixed("mp_limitteams", "1", "Prevent heavily stacked combat teams.")
             ]),
         new(
             "rpg-arena",
@@ -124,7 +158,13 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_freezetime", "0", "No freeze time."),
                 Fixed("mp_buy_anywhere", "1", "Buy anywhere."),
                 Fixed("mp_buytime", "9999", "Buying remains available."),
-                Fixed("mp_autoteambalance", "1", "Keep arena teams balanced.")
+                Fixed("mp_friendlyfire", "0", "Protect teammates while still allowing normal damage against the opposing team."),
+                Fixed("mp_teammates_are_enemies", "0", "Keep RPG Arena as team-versus-team combat."),
+                Fixed("mp_solid_teammates", "0", "Players do not block one another in tight arena corridors."),
+                Fixed("mp_respawn_immunitytime", "0", "No damage immunity remains after an arena respawn."),
+                Fixed("mp_ignore_round_win_conditions", "1", "Keep the arena running while players respawn."),
+                Fixed("mp_autoteambalance", "1", "Keep both RPG teams balanced."),
+                Fixed("mp_limitteams", "1", "Prevent one RPG team from becoming heavily stacked.")
             ])
     ];
 

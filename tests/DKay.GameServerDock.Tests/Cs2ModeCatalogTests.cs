@@ -49,6 +49,47 @@ public sealed class Cs2ModeCatalogTests
         Assert.Contains("not allowed", exception.Message);
     }
 
+    [Fact]
+    public void RpgArena_UsesTeamCombatWithoutRespawnImmunity()
+    {
+        var preset = Cs2ModeCatalog.Presets.Single(item => item.Id == "rpg-arena");
+        var request = new ApplyCs2ModePresetRequest(
+            preset.Id,
+            "fy_pool_day",
+            null,
+            0,
+            1,
+            false,
+            new Dictionary<string, string>());
+
+        var result = Cs2ModeCatalog.BuildConVars(preset, request);
+
+        Assert.Equal("0", result["mp_friendlyfire"]);
+        Assert.Equal("0", result["mp_teammates_are_enemies"]);
+        Assert.Equal("0", result["mp_respawn_immunitytime"]);
+        Assert.Equal("1", result["mp_ignore_round_win_conditions"]);
+        Assert.Equal("1", result["mp_autoteambalance"]);
+        Assert.Equal("1", result["mp_limitteams"]);
+    }
+
+    [Theory]
+    [InlineData("surf")]
+    [InlineData("kz")]
+    [InlineData("bhop")]
+    public void Movement_presets_prevent_player_blocking_and_round_interruptions(string presetId)
+    {
+        var preset = Cs2ModeCatalog.Presets.Single(item => item.Id == presetId);
+        var result = Cs2ModeCatalog.BuildConVars(
+            preset,
+            new ApplyCs2ModePresetRequest(preset.Id, $"{preset.Id}_test", null, 0, 1, false, new Dictionary<string, string>()));
+
+        Assert.Equal("0", result["mp_solid_teammates"]);
+        Assert.Equal("0", result["mp_friendlyfire"]);
+        Assert.Equal("1", result["mp_respawn_on_death_t"]);
+        Assert.Equal("1", result["mp_respawn_on_death_ct"]);
+        Assert.Equal("1", result["mp_ignore_round_win_conditions"]);
+    }
+
     [Theory]
     [InlineData("../server.cfg", null)]
     [InlineData("surf_good", "not-a-workshop-id")]

@@ -18,7 +18,7 @@ export class PublicServersComponent implements OnDestroy {
 
   constructor() {
     this.load();
-    this.refreshTimer = window.setInterval(() => this.load(true), 20_000);
+    this.refreshTimer = window.setInterval(() => this.load(true), 10_000);
   }
 
   ngOnDestroy(): void {
@@ -64,6 +64,14 @@ export class PublicServersComponent implements OnDestroy {
     return Number.isNaN(date.getTime())
       ? value
       : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  formatConnected(value: string | null): string {
+    if (!value) return 'just joined';
+    const parts = value.split(':').map(Number);
+    if (parts.length !== 3 || parts.some(part => Number.isNaN(part))) return 'online';
+    const [hours, minutes] = parts;
+    return hours > 0 ? `${hours}h ${minutes}m` : minutes > 0 ? `${minutes}m` : 'just joined';
   }
 
   private async copyText(value: string): Promise<void> {

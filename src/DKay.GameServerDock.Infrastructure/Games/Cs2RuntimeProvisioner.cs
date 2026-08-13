@@ -34,6 +34,8 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         new("mp_autoteambalance", "Auto team balance", "Teams & bots", "boolean", "0", "Move players automatically to keep teams balanced.", Options: ["0", "1"]),
         new("mp_limitteams", "Team difference limit", "Teams & bots", "integer", "0", "Maximum team-size difference. Zero allows intentionally stacked practice teams.", 0, 32, 1),
         new("mp_friendlyfire", "Friendly fire", "Teams & bots", "boolean", "0", "Allow teammates to damage one another.", Options: ["0", "1"]),
+        new("mp_teammates_are_enemies", "Free-for-all targeting", "Teams & bots", "boolean", "0", "Treat every other player as an enemy, even when CS2 places them on the same team.", Options: ["0", "1"]),
+        new("mp_solid_teammates", "Teammate collision", "Teams & bots", "boolean", "1", "Allow teammates to physically block one another.", Options: ["0", "1"]),
         new("bot_quota", "Bot quota", "Teams & bots", "integer", "0", "Number of bots maintained by the server.", 0, 32, 1),
         new("bot_difficulty", "Bot difficulty", "Teams & bots", "integer", "1", "Bot skill from 0 (easy) to 5 (maximum).", 0, 5, 1),
         new("bot_quota_mode", "Bot quota mode", "Teams & bots", "select", "normal", "Normal keeps manually added bots stable; fill and match manage bot counts automatically.", Options: ["normal", "fill", "match"]),
@@ -53,7 +55,8 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         new("mp_buy_anywhere", "Buy anywhere", "Admin playground", "boolean", "0", "Allow buying outside normal buy zones.", Options: ["0", "1"]),
         new("mp_ignore_round_win_conditions", "Ignore win conditions", "Admin playground", "boolean", "0", "Keep practice rounds running after normal win conditions occur.", Options: ["0", "1"]),
         new("mp_respawn_on_death_ct", "Respawn CT players", "Admin playground", "boolean", "0", "Immediately respawn Counter-Terrorists after death.", Options: ["0", "1"]),
-        new("mp_respawn_on_death_t", "Respawn T players", "Admin playground", "boolean", "0", "Immediately respawn Terrorists after death.", Options: ["0", "1"])
+        new("mp_respawn_on_death_t", "Respawn T players", "Admin playground", "boolean", "0", "Immediately respawn Terrorists after death.", Options: ["0", "1"]),
+        new("mp_respawn_immunitytime", "Respawn protection", "Admin playground", "decimal", "4", "Seconds during which a respawned player cannot take normal damage. Use zero for instant-action arenas.", 0, 30, 0.5m)
     ];
 
     public IReadOnlyList<Cs2LiveSettingDescriptor> SettingDefinitions => LiveSettingDefinitions;
@@ -127,6 +130,33 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         WriteAtomic(path, JsonSerializer.Serialize(normalized, SecretJsonOptions));
         WriteLiveConfiguration(server, normalized);
         return normalized;
+    }
+
+    public void AlignPersistedLiveSettingsWithPreset(
+        GameServerInstance server,
+        IReadOnlyDictionary<string, string> presetSettings)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(presetSettings);
+        var path = GetLiveSettingsPath(server);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var definitions = LiveSettingDefinitions.ToDictionary(setting => setting.Key, StringComparer.Ordinal);
+        var persisted = new Dictionary<string, string>(ReadPersistedLiveSettings(server), StringComparer.Ordinal);
+        foreach (var (key, value) in presetSettings)
+        {
+            if (definitions.TryGetValue(key, out var definition))
+            {
+                persisted[key] = NormalizeLiveSetting(definition, value);
+            }
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        WriteAtomic(path, JsonSerializer.Serialize(persisted, SecretJsonOptions));
+        WriteLiveConfiguration(server, persisted);
     }
 
     public Cs2GsltState GetGsltState(GameServerInstance server)
