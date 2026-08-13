@@ -122,7 +122,6 @@ public sealed partial class Cs2LiveControlService(
             {
                 try
                 {
-                    var adapter = modules.GetRequired(server.TemplateId).Adapter;
                     var hudResult = await adapter.ExecuteConsoleCommandAsync(
                         server,
                         processes,
