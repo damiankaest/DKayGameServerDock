@@ -24,6 +24,7 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options)
 
         File.WriteAllText(Path.Combine(server.InstallDirectory, "steam_appid.txt"), "730\n");
         WriteRconConfiguration(server, GetOrCreateRconPassword(server));
+        EnsureRconAutoexec(server);
     }
 
     public string GetRconPassword(GameServerInstance server)
@@ -102,6 +103,26 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options)
         File.WriteAllText(
             Path.Combine(configDirectory, "dkay-rcon.cfg"),
             $"// Managed by DKay Game Server Dock. Do not share this file.{Environment.NewLine}rcon_password \"{password}\"{Environment.NewLine}");
+    }
+
+    private static void EnsureRconAutoexec(GameServerInstance server)
+    {
+        const string directive = "exec dkay-rcon.cfg";
+        var configDirectory = Path.Combine(server.InstallDirectory, "game", "csgo", "cfg");
+        Directory.CreateDirectory(configDirectory);
+        var autoexecPath = Path.Combine(configDirectory, "autoexec.cfg");
+        if (File.Exists(autoexecPath) && File.ReadLines(autoexecPath).Any(line =>
+                line.Trim().Equals(directive, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var separator = File.Exists(autoexecPath) && new FileInfo(autoexecPath).Length > 0
+            ? Environment.NewLine
+            : string.Empty;
+        File.AppendAllText(
+            autoexecPath,
+            $"{separator}// Load the private local administrator command channel before the first map.{Environment.NewLine}{directive}{Environment.NewLine}");
     }
 
     private static string GetRconSecretPath(GameServerInstance server) =>

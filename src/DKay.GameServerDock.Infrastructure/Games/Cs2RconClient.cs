@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -17,41 +18,96 @@ public sealed class Cs2RconClient(Cs2RuntimeProvisioner runtime)
     public async Task<string> ExecuteAsync(
         GameServerInstance server,
         string command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? listenerWait = null)
     {
         ArgumentNullException.ThrowIfNull(server);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(8));
+        var wait = listenerWait ?? TimeSpan.Zero;
+        if (wait < TimeSpan.Zero || wait > TimeSpan.FromSeconds(30))
+        {
+            throw new ArgumentOutOfRangeException(nameof(listenerWait));
+        }
 
-        using var client = new TcpClient { NoDelay = true };
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(wait + TimeSpan.FromSeconds(8));
+        var elapsed = Stopwatch.StartNew();
+        SocketException? connectionFailure = null;
         try
         {
-            await client.ConnectAsync(IPAddress.Loopback, server.Port, timeout.Token);
-            await using var stream = client.GetStream();
-            await AuthenticateAsync(stream, runtime.GetRconPassword(server), timeout.Token);
-
-            var requestId = RandomNumberGenerator.GetInt32(1, int.MaxValue);
-            await WritePacketAsync(stream, requestId, ExecutePacketType, command, timeout.Token);
-            var response = await ReadPacketAsync(stream, timeout.Token);
-            if (response.Id != requestId)
+            while (true)
             {
-                throw new InvalidOperationException("CS2 returned an unexpected RCON response identifier.");
+                try
+                {
+                    return await ExecuteOnceAsync(
+                        server,
+                        command,
+                        runtime.GetRconPassword(server),
+                        timeout.Token);
+                }
+                catch (SocketException exception) when (
+                    IsListenerUnavailable(exception) && elapsed.Elapsed < wait)
+                {
+                    connectionFailure = exception;
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), timeout.Token);
+                }
             }
-
-            return response.Body;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException($"CS2 did not answer the local RCON command on port {server.Port} within 8 seconds.");
+            if (connectionFailure is not null)
+            {
+                throw CreateConnectionException(server, wait, connectionFailure);
+            }
+
+            throw new TimeoutException(
+                $"CS2 did not answer the local RCON command on port {server.Port} within {(wait + TimeSpan.FromSeconds(8)).TotalSeconds:0} seconds.");
         }
         catch (SocketException exception)
         {
-            throw new InvalidOperationException(
-                $"Could not reach the local CS2 command channel on 127.0.0.1:{server.Port}: {exception.Message}",
-                exception);
+            throw CreateConnectionException(server, wait, exception);
         }
+    }
+
+    private static async Task<string> ExecuteOnceAsync(
+        GameServerInstance server,
+        string command,
+        string password,
+        CancellationToken cancellationToken)
+    {
+        using var client = new TcpClient { NoDelay = true };
+        await client.ConnectAsync(IPAddress.Loopback, server.Port, cancellationToken);
+        await using var stream = client.GetStream();
+        await AuthenticateAsync(stream, password, cancellationToken);
+
+        var requestId = RandomNumberGenerator.GetInt32(1, int.MaxValue);
+        await WritePacketAsync(stream, requestId, ExecutePacketType, command, cancellationToken);
+        var response = await ReadPacketAsync(stream, cancellationToken);
+        if (response.Id != requestId)
+        {
+            throw new InvalidOperationException("CS2 returned an unexpected RCON response identifier.");
+        }
+
+        return response.Body;
+    }
+
+    private static bool IsListenerUnavailable(SocketException exception) => exception.SocketErrorCode is
+        SocketError.ConnectionRefused or SocketError.TimedOut or SocketError.HostUnreachable;
+
+    private static InvalidOperationException CreateConnectionException(
+        GameServerInstance server,
+        TimeSpan listenerWait,
+        SocketException exception)
+    {
+        var timing = listenerWait > TimeSpan.Zero
+            ? $" after waiting {listenerWait.TotalSeconds:0} seconds"
+            : string.Empty;
+        return new InvalidOperationException(
+            $"CS2 is running, but its local RCON listener did not open on 127.0.0.1:{server.Port}{timing}. " +
+            "Restart the server once so the managed autoexec configuration is loaded. " +
+            $"Socket error: {exception.Message}",
+            exception);
     }
 
     private static async Task AuthenticateAsync(NetworkStream stream, string password, CancellationToken cancellationToken)
