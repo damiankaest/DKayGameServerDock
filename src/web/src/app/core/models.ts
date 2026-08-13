@@ -209,10 +209,12 @@ export interface Cs2ModePreset {
   settings: Cs2ConVar[];
   defaultCombatMode: Cs2CombatMode;
   defaultAmmoMode: Cs2AmmoMode;
+  defaultHudMode: Cs2HudMode;
 }
 
 export type Cs2CombatMode = 'peaceful' | 'team' | 'ffa';
 export type Cs2AmmoMode = 'standard' | 'infinite-magazine' | 'infinite-reserve';
+export type Cs2HudMode = 'hidden' | 'timer' | 'movement';
 
 export interface Cs2ManagedPackage {
   id: string;
@@ -244,6 +246,7 @@ export interface Cs2ModeProfile {
   botDifficulty: number;
   combatMode: Cs2CombatMode;
   ammoMode: Cs2AmmoMode;
+  hudMode: Cs2HudMode;
   overrides: Record<string, string>;
   recommendedPackageIds: string[];
   updatedAt: string;
@@ -302,6 +305,7 @@ export interface ApplyCs2ModePresetRequest {
   overrides: Record<string, string>;
   combatMode: Cs2CombatMode;
   ammoMode: Cs2AmmoMode;
+  hudMode: Cs2HudMode;
 }
 
 export interface Cs2ModeApplyResult {

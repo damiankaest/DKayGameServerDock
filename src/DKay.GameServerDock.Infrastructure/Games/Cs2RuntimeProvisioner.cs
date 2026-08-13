@@ -39,6 +39,7 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         new("bot_quota", "Bot quota", "Teams & bots", "integer", "0", "Number of bots maintained by the server.", 0, 32, 1),
         new("bot_difficulty", "Bot difficulty", "Teams & bots", "integer", "1", "Bot skill from 0 (easy) to 5 (maximum).", 0, 5, 1),
         new("bot_quota_mode", "Bot quota mode", "Teams & bots", "select", "normal", "Normal keeps manually added bots stable; fill and match manage bot counts automatically.", Options: ["normal", "fill", "match"]),
+        new("bot_stop", "Freeze all bots", "Teams & bots", "boolean", "0", "Stop bot movement and attacks. Keep this disabled for normal play.", Options: ["0", "1"]),
 
         new("mp_damage_scale_ct_head", "CT head damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Counter-Terrorist head hits. One is normal damage.", 0, 5, 0.1m),
         new("mp_damage_scale_ct_body", "CT body damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Counter-Terrorist body hits. One is normal damage.", 0, 5, 0.1m),

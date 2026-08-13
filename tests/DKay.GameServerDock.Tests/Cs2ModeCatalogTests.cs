@@ -140,6 +140,23 @@ public sealed class Cs2ModeCatalogTests
         Assert.Equal("0", sharpTimer["sharptimer_remove_damage"]);
     }
 
+    [Theory]
+    [InlineData("hidden", "0", "0")]
+    [InlineData("timer", "1", "0")]
+    [InlineData("movement", "1", "1")]
+    public void Sharptimer_hud_is_configurable_per_profile(
+        string hudMode,
+        string timerVisible,
+        string movementDetailsVisible)
+    {
+        var commands = Cs2ModeCatalog.BuildSharpTimerHudCommands(hudMode);
+
+        Assert.Equal(timerVisible, commands["sharptimer_enable_timer_hud"]);
+        Assert.Equal(movementDetailsVisible, commands["sharptimer_enable_velocity_hud"]);
+        Assert.Equal(movementDetailsVisible, commands["sharptimer_enable_strafesync_hud"]);
+        Assert.Equal(movementDetailsVisible, commands["sharptimer_enable_keys_hud"]);
+    }
+
     [Fact]
     public async Task Active_combat_policy_is_reapplied_after_sharptimer_without_overwriting_custom_config()
     {
@@ -181,15 +198,18 @@ public sealed class Cs2ModeCatalogTests
             Assert.Contains("sv_infinite_ammo 0", combatConfig);
             Assert.Contains("sharptimer_remove_damage 0", combatConfig);
             Assert.Contains("sharptimer_apply_infinite_ammo 0", combatConfig);
+            Assert.Contains("sharptimer_enable_velocity_hud 1", combatConfig);
 
             var customExec = await File.ReadAllTextAsync(customExecPath);
             Assert.Contains("sv_staminamax 0", customExec);
             Assert.Equal(1, customExec.Split("exec dkay-combat.cfg", StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, customExec.Split("exec dkay-live.cfg", StringSplitOptions.None).Length - 1);
 
             var mapExec = await File.ReadAllTextAsync(mapExecPath);
             Assert.Contains("sv_airaccelerate 1000", mapExec);
-            Assert.EndsWith("exec dkay-combat.cfg\n", mapExec.Replace("\r\n", "\n", StringComparison.Ordinal));
+            Assert.EndsWith("exec dkay-combat.cfg\nexec dkay-live.cfg\n", mapExec.Replace("\r\n", "\n", StringComparison.Ordinal));
             Assert.Equal(1, mapExec.Split("exec dkay-combat.cfg", StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, mapExec.Split("exec dkay-live.cfg", StringSplitOptions.None).Length - 1);
         }
         finally
         {

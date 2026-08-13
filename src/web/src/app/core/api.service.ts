@@ -92,8 +92,8 @@ export class ApiService {
     return this.http.get<Cs2LiveControlState>(`/api/servers/${id}/cs2-control`);
   }
 
-  applyCs2LiveControl(id: string, values: Record<string, string>): Observable<Cs2LiveConfigurationApplyResult> {
-    return this.http.put<Cs2LiveConfigurationApplyResult>(`/api/servers/${id}/cs2-control`, { values });
+  applyCs2LiveControl(id: string, values: Record<string, string>, changedKeys: string[]): Observable<Cs2LiveConfigurationApplyResult> {
+    return this.http.put<Cs2LiveConfigurationApplyResult>(`/api/servers/${id}/cs2-control`, { values, changedKeys });
   }
 
   runCs2Action(id: string, actionId: string, value: string | null = null): Observable<ConsoleCommandResult> {

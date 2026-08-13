@@ -166,6 +166,14 @@
                   </select>
                   <small>This also controls SharpTimer's own infinite-ammo feature, so RPG and Bhop profiles behave exactly as selected.</small>
                 </label>
+                <label class="mode-policy-field">In-game movement HUD
+                  <select [value]="modeHud()" (change)="updateModeHud($event)">
+                    <option value="hidden">Hidden · clean screen</option>
+                    <option value="timer">Timer only · no speed, sync or keys</option>
+                    <option value="movement">Movement details · speed, sync and keys</option>
+                  </select>
+                  <small>Controls SharpTimer's center display per map. Combat and RPG presets default to a clean screen; Surf, KZ and Bhop keep movement details.</small>
+                </label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {
