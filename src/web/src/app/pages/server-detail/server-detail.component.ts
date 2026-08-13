@@ -59,6 +59,8 @@ export class ServerDetailComponent implements OnDestroy {
   readonly liveAction = signal('');
   readonly liveMessage = signal('');
   readonly liveEditorView = signal<'recommended' | 'all'>('recommended');
+  readonly liveQuery = signal('');
+  readonly activeLiveGroup = signal('Round & match');
   readonly nextMapProfileId = signal('');
   readonly nextMapDelaySeconds = signal(60);
   readonly mapChangeAction = signal('');
@@ -134,6 +136,7 @@ export class ServerDetailComponent implements OnDestroy {
           this.selectPreset(result.catalog.presets[0].id);
           this.modeMapName.set(this.server()?.settings?.['initialMap'] || 'de_mirage');
         }
+        this.normalizeLiveGroup();
       },
       error: error => this.error.set(error.error?.detail ?? 'CS2 mode presets could not be loaded.')
     });
@@ -143,7 +146,10 @@ export class ServerDetailComponent implements OnDestroy {
     if (this.modeStateRefreshing()) return;
     this.modeStateRefreshing.set(true);
     this.api.cs2Mode(this.id).pipe(finalize(() => this.modeStateRefreshing.set(false))).subscribe({
-      next: state => this.modeState.set(state),
+      next: state => {
+        this.modeState.set(state);
+        this.normalizeLiveGroup();
+      },
       error: error => {
         if (showError) {
           this.error.set(error.error?.detail ?? 'The Workshop installation state could not be refreshed.');
@@ -167,32 +173,107 @@ export class ServerDetailComponent implements OnDestroy {
         this.liveControl.set(state);
         this.liveValues.set({ ...state.values });
         this.liveMessage.set(state.liveReadMessage);
+        this.normalizeLiveGroup();
       },
       error: error => this.error.set(error.error?.detail ?? 'The CS2 live configuration could not be loaded.')
     });
   }
 
   liveGroups(): string[] {
-    return [...new Set(this.visibleLiveSettings().map(setting => setting.group))];
+    return [...new Set(this.liveSettingsInView().map(setting => setting.group))];
+  }
+
+  displayedLiveGroups(): string[] {
+    const groups = this.liveGroups();
+    if (this.liveQuery().trim()) {
+      return groups.filter(group => this.liveSettingsFor(group).length > 0);
+    }
+
+    const active = groups.includes(this.activeLiveGroup()) ? this.activeLiveGroup() : groups[0];
+    return active ? [active] : [];
   }
 
   liveSettingsFor(group: string): Cs2LiveSetting[] {
-    return this.visibleLiveSettings().filter(setting => setting.group === group);
+    const query = this.liveQuery().trim().toLocaleLowerCase();
+    return this.liveSettingsInView().filter(setting =>
+      setting.group === group &&
+      (!query || `${setting.label} ${setting.key} ${setting.description} ${setting.group}`.toLocaleLowerCase().includes(query)));
+  }
+
+  liveSettingCount(group: string): number {
+    return this.liveSettingsInView().filter(setting => setting.group === group).length;
+  }
+
+  liveSearchResultCount(): number {
+    return this.displayedLiveGroups().reduce((total, group) => total + this.liveSettingsFor(group).length, 0);
   }
 
   livePresetName(): string {
     return this.modeCatalog()?.presets.find(preset => preset.id === this.activeModeProfile()?.presetId)?.name ?? 'this server';
   }
 
-  private visibleLiveSettings(): Cs2LiveSetting[] {
+  liveGroupDescription(group: string): string {
+    return ({
+      'Round & match': 'Warmup, round duration, buy time and the overall match flow.',
+      'Teams & bots': 'Team balance, player interaction and how bots join the match.',
+      'Movement & physics': 'Gravity, acceleration, bunnyhop behavior and maximum movement speed.',
+      'Admin playground': 'Private practice tools such as cheats, ammunition, respawns and endless rounds.'
+    } as Record<string, string>)[group] ?? 'Runtime values for the running CS2 server.';
+  }
+
+  liveGroupIcon(group: string): string {
+    return ({
+      'Round & match': '◷',
+      'Teams & bots': 'VS',
+      'Movement & physics': '↗',
+      'Admin playground': '⚙'
+    } as Record<string, string>)[group] ?? '•';
+  }
+
+  liveOptionLabel(setting: Cs2LiveSetting, option: string): string {
+    if (setting.key === 'bot_quota_mode') {
+      return ({ normal: 'Manual bot count', fill: 'Fill empty player slots', match: 'Match the human player count' } as Record<string, string>)[option] ?? option;
+    }
+    if (setting.key === 'sv_infinite_ammo') {
+      return ({ '0': 'Off', '1': 'Infinite magazine', '2': 'Infinite reserve ammunition' } as Record<string, string>)[option] ?? option;
+    }
+    return option;
+  }
+
+  setLiveEditorView(view: 'recommended' | 'all'): void {
+    this.liveEditorView.set(view);
+    this.normalizeLiveGroup();
+  }
+
+  selectLiveGroup(group: string): void {
+    this.activeLiveGroup.set(group);
+    this.liveQuery.set('');
+  }
+
+  updateLiveQuery(event: Event): void {
+    this.liveQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  clearLiveQuery(): void {
+    this.liveQuery.set('');
+  }
+
+  private liveSettingsInView(): Cs2LiveSetting[] {
     const settings = this.liveControl()?.settings ?? [];
     if (this.liveEditorView() === 'all') return settings;
 
     const presetId = this.activeModeProfile()?.presetId ?? 'classic';
-    const relevantGroups = presetId === 'surf' || presetId === 'kz' || presetId === 'bhop'
+    const relevantGroups = presetId === 'surf' || presetId === 'kz' || presetId === 'bhop' || presetId === 'scoutzknivez'
       ? new Set(['Round & match', 'Teams & bots', 'Movement & physics'])
       : new Set(['Round & match', 'Teams & bots', 'Admin playground']);
     return settings.filter(setting => relevantGroups.has(setting.group));
+  }
+
+  private normalizeLiveGroup(): void {
+    const groups = this.liveGroups();
+    if (groups.length && !groups.includes(this.activeLiveGroup())) {
+      this.activeLiveGroup.set(groups[0]);
+    }
   }
 
   liveActionGroups(): string[] {

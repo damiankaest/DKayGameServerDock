@@ -158,13 +158,13 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_freezetime", "0", "No freeze time."),
                 Fixed("mp_buy_anywhere", "1", "Buy anywhere."),
                 Fixed("mp_buytime", "9999", "Buying remains available."),
-                Fixed("mp_friendlyfire", "1", "Players can damage one another on compact arena maps."),
-                Fixed("mp_teammates_are_enemies", "1", "Treat every other player as an enemy for free-for-all combat."),
+                Fixed("mp_friendlyfire", "0", "Protect teammates while still allowing normal damage against the opposing team."),
+                Fixed("mp_teammates_are_enemies", "0", "Keep RPG Arena as team-versus-team combat."),
                 Fixed("mp_solid_teammates", "0", "Players do not block one another in tight arena corridors."),
                 Fixed("mp_respawn_immunitytime", "0", "No damage immunity remains after an arena respawn."),
                 Fixed("mp_ignore_round_win_conditions", "1", "Keep the arena running while players respawn."),
-                Fixed("mp_autoteambalance", "0", "Do not move players between arena teams."),
-                Fixed("mp_limitteams", "0", "Allow any team distribution on small arena maps.")
+                Fixed("mp_autoteambalance", "1", "Keep both RPG teams balanced."),
+                Fixed("mp_limitteams", "1", "Prevent one RPG team from becoming heavily stacked.")
             ])
     ];
 

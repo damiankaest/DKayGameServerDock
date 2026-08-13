@@ -276,24 +276,39 @@
               <button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply to live server' : 'Save for next start' }}</button>
             </header>
             <div class="live-editor-toolbar">
-              <div><strong>{{ livePresetName() }} controls</strong><small>{{ liveEditorView() === 'recommended' ? 'Showing the settings that matter for this preset.' : 'Showing every supported CS2 runtime value.' }}</small></div>
+              <div class="live-editor-summary"><strong>{{ livePresetName() }} controls</strong><small>{{ liveEditorView() === 'recommended' ? 'Focused controls for the active preset. Unrelated tuning stays hidden.' : 'Every supported value, including expert tuning.' }}</small></div>
               <div class="live-editor-switch" role="group" aria-label="Live configuration detail level">
-                <button type="button" [class.active]="liveEditorView() === 'recommended'" (click)="liveEditorView.set('recommended')">Recommended</button>
-                <button type="button" [class.active]="liveEditorView() === 'all'" (click)="liveEditorView.set('all')">All / advanced</button>
+                <button type="button" [class.active]="liveEditorView() === 'recommended'" (click)="setLiveEditorView('recommended')">Recommended</button>
+                <button type="button" [class.active]="liveEditorView() === 'all'" (click)="setLiveEditorView('all')">All / advanced</button>
               </div>
             </div>
-            <div class="live-setting-groups">
+            <div class="live-editor-search">
+              <span>⌕</span>
+              <input type="search" aria-label="Search server settings" placeholder="Search settings, for example bots, warmup, gravity or mp_roundtime…" [value]="liveQuery()" (input)="updateLiveQuery($event)" />
+              @if (liveQuery()) { <button type="button" aria-label="Clear setting search" (click)="clearLiveQuery()">Clear</button> }
+            </div>
+            <nav class="live-group-tabs" aria-label="Server setting categories">
               @for (group of liveGroups(); track group) {
+                <button type="button" [class.active]="!liveQuery() && activeLiveGroup() === group" (click)="selectLiveGroup(group)">
+                  <span>{{ liveGroupIcon(group) }}</span><strong>{{ group }}</strong><small>{{ liveSettingCount(group) }}</small>
+                </button>
+              }
+            </nav>
+            @if (liveQuery()) {
+              <p class="live-search-summary"><strong>{{ liveSearchResultCount() }}</strong> setting{{ liveSearchResultCount() === 1 ? '' : 's' }} matching “{{ liveQuery() }}”</p>
+            }
+            <div class="live-setting-groups">
+              @for (group of displayedLiveGroups(); track group) {
                 <section class="live-setting-group">
-                  <h3>{{ group }}</h3>
+                  <header><span>{{ liveGroupIcon(group) }}</span><div><h3>{{ group }}</h3><p>{{ liveGroupDescription(group) }}</p></div></header>
                   <div class="live-setting-grid">
                     @for (setting of liveSettingsFor(group); track setting.key) {
                       <label [class.cheat-setting]="setting.key === 'sv_cheats'">
-                        <span><strong>{{ setting.label }}</strong><code>{{ setting.key }}</code></span>
+                        <span><strong>{{ setting.label }}</strong>@if (liveEditorView() === 'all') { <code>{{ setting.key }}</code> }</span>
                         @if (setting.type === 'boolean') {
                           <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)"><option value="1">Enabled</option><option value="0">Disabled</option></select>
                         } @else if (setting.type === 'select') {
-                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)">@for (option of setting.options || []; track option) { <option [value]="option">{{ option }}</option> }</select>
+                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)">@for (option of setting.options || []; track option) { <option [value]="option">{{ liveOptionLabel(setting, option) }}</option> }</select>
                         } @else {
                           <input type="number" [min]="setting.minimum" [max]="setting.maximum" [step]="setting.step || (setting.type === 'integer' ? 1 : 'any')" [value]="liveValues()[setting.key]" (input)="updateLiveValue(setting.key, $event)" />
                         }
@@ -302,6 +317,8 @@
                     }
                   </div>
                 </section>
+              } @empty {
+                <div class="live-settings-empty"><span>⌕</span><strong>No settings found</strong><p>Try a broader term or switch to “All / advanced”.</p><button class="secondary-button small" type="button" (click)="clearLiveQuery()">Clear search</button></div>
               }
             </div>
             <div class="live-config-footer"><span><i></i>Values are persisted outside generated preset files</span><button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply changes' : 'Save changes' }}</button></div>

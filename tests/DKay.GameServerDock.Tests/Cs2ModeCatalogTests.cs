@@ -50,7 +50,7 @@ public sealed class Cs2ModeCatalogTests
     }
 
     [Fact]
-    public void RpgArena_EnablesDamageAndFreeForAllCombat()
+    public void RpgArena_UsesTeamCombatWithoutRespawnImmunity()
     {
         var preset = Cs2ModeCatalog.Presets.Single(item => item.Id == "rpg-arena");
         var request = new ApplyCs2ModePresetRequest(
@@ -64,12 +64,12 @@ public sealed class Cs2ModeCatalogTests
 
         var result = Cs2ModeCatalog.BuildConVars(preset, request);
 
-        Assert.Equal("1", result["mp_friendlyfire"]);
-        Assert.Equal("1", result["mp_teammates_are_enemies"]);
+        Assert.Equal("0", result["mp_friendlyfire"]);
+        Assert.Equal("0", result["mp_teammates_are_enemies"]);
         Assert.Equal("0", result["mp_respawn_immunitytime"]);
         Assert.Equal("1", result["mp_ignore_round_win_conditions"]);
-        Assert.Equal("0", result["mp_autoteambalance"]);
-        Assert.Equal("0", result["mp_limitteams"]);
+        Assert.Equal("1", result["mp_autoteambalance"]);
+        Assert.Equal("1", result["mp_limitteams"]);
     }
 
     [Theory]
