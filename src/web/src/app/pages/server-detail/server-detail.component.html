@@ -62,7 +62,11 @@
         </section>
 
         @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed') {
-          <p class="publication-warning full"><b>CS2 is running without a detected Workshop payload.</b> The selected map has not appeared under the server's Workshop map cache. Stop CS2, verify the Steam Web API key, choose a validated map below and start it again while watching the live console.</p>
+          <div class="workshop-download-state full">
+            <span aria-hidden="true"></span>
+            <div><b>Workshop map is downloading or being verified.</b><p>This is expected on the first start. Keep CS2 running; the Hub checks the server cache every five seconds. Watch Console for UGC or Workshop messages. Only stop and troubleshoot if the state does not change and CS2 reports a download error.</p></div>
+            <button type="button" class="secondary-button small" [disabled]="modeStateRefreshing()" (click)="refreshCs2ModeState(true)">{{ modeStateRefreshing() ? 'Checking…' : 'Check now' }}</button>
+          </div>
         } @else if (current.status === 'Running' && !current.currentMap) {
           <p class="publication-warning full"><b>The process is running, but no active map is being reported.</b> A public join can still time out or land on an empty level. Run the command-channel self-test and inspect the first Workshop/download messages in Console.</p>
         }

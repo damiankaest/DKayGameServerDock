@@ -76,10 +76,14 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
-    public void Suppresses_cs2_console_input_polling_noise_only()
+    public void Suppresses_known_cs2_console_noise_without_hiding_native_plugin_failures()
     {
         Assert.False(ConsoleOutputPolicy.ShouldRecord("CTextConsoleWin::GetLine: !GetNumberOfConsoleInputEvents"));
+        Assert.False(ConsoleOutputPolicy.ShouldRecord(
+            @"Could not PreloadLibrary E:\server\game\csgo\addons\counterstrikesharp\api\System.Runtime.dll - Access violation at 00007FFA."));
         Assert.True(ConsoleOutputPolicy.ShouldRecord("Connection to Steam servers successful."));
+        Assert.True(ConsoleOutputPolicy.ShouldRecord(
+            @"[META] Failed to load plugin addons\cs2fixes-rampbugfix\bin\win64\cs2fixes-rampbugfix: procedure not found."));
     }
 
     [Fact]
@@ -242,6 +246,37 @@ public sealed class Cs2RuntimeProvisionerTests
         {
             var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
             Assert.Throws<InvalidOperationException>(() => provisioner.SaveWorkshopApiKey(server, "+quit"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Workshop_launch_cfg_runs_after_source2_init_without_exposing_the_api_key()
+    {
+        const string key = "0123456789abcdef0123456789abcdef";
+        const string publishedFileId = "3076153623";
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            provisioner.SaveWorkshopApiKey(server, key);
+            provisioner.WriteWorkshopLaunchConfiguration(server, publishedFileId);
+
+            var launchConfig = File.ReadAllText(Path.Combine(root, "game", "csgo", "cfg", "dkay-workshop-start.cfg"));
+            Assert.Contains($"DKAY_WORKSHOP_REQUEST {publishedFileId}", launchConfig, StringComparison.Ordinal);
+            Assert.Contains($"host_workshop_map {publishedFileId}", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("sv_debug_ugc_downloads 1", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("exec dkay-server.cfg", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("exec dkay-live.cfg", launchConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain(key, launchConfig, StringComparison.Ordinal);
+            Assert.Throws<InvalidOperationException>(() =>
+                provisioner.WriteWorkshopLaunchConfiguration(server, "3076153623;quit"));
         }
         finally
         {

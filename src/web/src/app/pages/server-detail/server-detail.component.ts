@@ -32,6 +32,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly copied = signal('');
   readonly modeCatalog = signal<Cs2ModeCatalog | null>(null);
   readonly modeState = signal<Cs2ModeState | null>(null);
+  readonly modeStateRefreshing = signal(false);
   readonly selectedPresetId = signal('');
   readonly modeMapName = signal('');
   readonly modeWorkshopId = signal('');
@@ -126,6 +127,19 @@ export class ServerDetailComponent implements OnDestroy {
         }
       },
       error: error => this.error.set(error.error?.detail ?? 'CS2 mode presets could not be loaded.')
+    });
+  }
+
+  refreshCs2ModeState(showError = false): void {
+    if (this.modeStateRefreshing()) return;
+    this.modeStateRefreshing.set(true);
+    this.api.cs2Mode(this.id).pipe(finalize(() => this.modeStateRefreshing.set(false))).subscribe({
+      next: state => this.modeState.set(state),
+      error: error => {
+        if (showError) {
+          this.error.set(error.error?.detail ?? 'The Workshop installation state could not be refreshed.');
+        }
+      }
     });
   }
 
@@ -386,6 +400,11 @@ export class ServerDetailComponent implements OnDestroy {
         } : control);
         if (this.publicationPort() === null) this.publicationPort.set(server.publication.publicPort);
         if (loadModes && server.templateId === 'counter-strike-2') this.loadCs2Modes();
+        else if (server.templateId === 'counter-strike-2' && this.modeState() &&
+          (this.tab() === 'modes' ||
+            (server.status === 'Running' && this.activeModeProfile()?.workshopInstallState === 'pending'))) {
+          this.refreshCs2ModeState();
+        }
       },
       error: error => this.error.set(error.error?.detail ?? 'The server could not be loaded.')
     });

@@ -181,6 +181,45 @@ public sealed class Cs2ModeCatalogTests
         }
     }
 
+    [Theory]
+    [InlineData("game/csgo/maps/workshop/{id}/surf_test.vpk")]
+    [InlineData("game/csgo/maps/workshop/{id}.vpk")]
+    [InlineData("steamapps/workshop/content/730/{id}/surf_test.vpk")]
+    public async Task Workshop_profile_detects_supported_cs2_cache_layouts(string relativePayloadPath)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-workshop-state-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            var runtime = new Cs2RuntimeProvisioner(new DockOptions());
+            runtime.SaveWorkshopApiKey(server, "0123456789abcdef0123456789abcdef");
+            using var httpClient = new HttpClient(new WorkshopHandler(false));
+            var manager = new Cs2ModeManager(httpClient, runtime);
+            var request = new ApplyCs2ModePresetRequest(
+                "surf",
+                "surf_beginner_cs2",
+                "3141592653",
+                0,
+                1,
+                false,
+                new Dictionary<string, string>());
+
+            var pending = await manager.ApplyPresetAsync(server, request, CancellationToken.None);
+            Assert.Equal("pending", Assert.Single(pending.Profiles).WorkshopInstallState);
+
+            var payloadPath = Path.Combine(root, relativePayloadPath.Replace("{id}", "3141592653", StringComparison.Ordinal));
+            Directory.CreateDirectory(Path.GetDirectoryName(payloadPath)!);
+            await File.WriteAllTextAsync(payloadPath, "workshop-map");
+
+            var installed = await manager.GetStateAsync(server, CancellationToken.None);
+            Assert.Equal("installed", Assert.Single(installed.Profiles).WorkshopInstallState);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static GameServerInstance CreateServer(string root)
     {
         Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
@@ -247,9 +286,13 @@ public sealed class Cs2ModeCatalogTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            const string usableMap = "{\"publishedfileid\":\"3141592653\",\"result\":1,\"consumer_appid\":730,\"file_type\":0,\"title\":\"surf_beginner_cs2\",\"file_size\":\"104857600\",\"subscriptions\":\"42000\",\"time_updated\":1770000000,\"preview_url\":\"https://images.steamusercontent.com/example.jpg\",\"tags\":[{\"tag\":\"Surf\",\"display_name\":\"Surf\"}]}";
+            var isSearch = request.RequestUri?.AbsolutePath.Contains("QueryFiles", StringComparison.Ordinal) == true;
             var body = removedDetails
                 ? "{\"response\":{\"result\":1,\"resultcount\":1,\"publishedfiledetails\":[{\"publishedfileid\":\"607186931\",\"result\":9}]}}"
-                : "{\"response\":{\"total\":2,\"publishedfiledetails\":[{\"publishedfileid\":\"3141592653\",\"result\":1,\"consumer_appid\":730,\"file_type\":0,\"title\":\"surf_beginner_cs2\",\"file_size\":\"104857600\",\"subscriptions\":\"42000\",\"time_updated\":1770000000,\"preview_url\":\"https://images.steamusercontent.com/example.jpg\",\"tags\":[{\"tag\":\"Surf\",\"display_name\":\"Surf\"}]},{\"publishedfileid\":\"607186931\",\"result\":9}]}}";
+                : isSearch
+                    ? $"{{\"response\":{{\"total\":2,\"publishedfiledetails\":[{usableMap},{{\"publishedfileid\":\"607186931\",\"result\":9}}]}}}}"
+                    : $"{{\"response\":{{\"result\":1,\"resultcount\":1,\"publishedfiledetails\":[{usableMap}]}}}}";
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),

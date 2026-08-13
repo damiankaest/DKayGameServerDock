@@ -57,20 +57,25 @@ public sealed class Cs2GameModule(
         arguments.Add("dkay-bootstrap.cfg");
         if (!string.IsNullOrWhiteSpace(activeProfile?.WorkshopId))
         {
-            arguments.Add("+host_workshop_map");
-            arguments.Add(activeProfile.WorkshopId);
+            // A stock bootstrap map initializes Steam, networking and RCON before the UGC request.
+            // If Steam rejects the Workshop item, the process remains diagnosable instead of idle.
+            arguments.Add("+map");
+            arguments.Add(settings.Get("initialMap", "de_mirage"));
+            runtime.WriteWorkshopLaunchConfiguration(server, activeProfile.WorkshopId);
+            arguments.Add("+exec");
+            arguments.Add("dkay-workshop-start.cfg");
         }
         else
         {
             arguments.Add("+map");
             arguments.Add(activeProfile?.MapName ?? settings.Get("initialMap", "de_mirage"));
+            arguments.Add("+exec");
+            arguments.Add("dkay-server.cfg");
+            // Live Control values intentionally run after the selected map preset so the admin's
+            // explicit runtime overrides remain authoritative across preset and game updates.
+            arguments.Add("+exec");
+            arguments.Add("dkay-live.cfg");
         }
-        arguments.Add("+exec");
-        arguments.Add("dkay-server.cfg");
-        // Live Control values intentionally run after the selected map preset so the admin's
-        // explicit runtime overrides remain authoritative across preset and game updates.
-        arguments.Add("+exec");
-        arguments.Add("dkay-live.cfg");
 
         return new ServerLaunchSpec(
             executable,

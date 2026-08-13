@@ -483,28 +483,45 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
 
     private static string GetWorkshopInstallState(GameServerInstance server, string publishedFileId)
     {
-        var workshopRoot = Path.Combine(server.InstallDirectory, "game", "csgo", "maps", "workshop", publishedFileId);
-        if (!Directory.Exists(workshopRoot))
+        var mapsWorkshopRoot = Path.Combine(server.InstallDirectory, "game", "csgo", "maps", "workshop");
+        var directPayloads = new[]
         {
-            return "pending";
+            Path.Combine(mapsWorkshopRoot, $"{publishedFileId}.vpk"),
+            Path.Combine(mapsWorkshopRoot, $"{publishedFileId}.bsp")
+        };
+        if (directPayloads.Any(File.Exists))
+        {
+            return "installed";
         }
 
-        try
+        var workshopRoots = new[]
         {
-            return Directory.EnumerateFiles(workshopRoot, "*", SearchOption.AllDirectories)
-                .Any(file => file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase) ||
-                             file.EndsWith(".bsp", StringComparison.OrdinalIgnoreCase))
-                ? "installed"
-                : "pending";
-        }
-        catch (IOException)
+            Path.Combine(mapsWorkshopRoot, publishedFileId),
+            Path.Combine(server.InstallDirectory, "steamapps", "workshop", "content", "730", publishedFileId)
+        };
+
+        foreach (var workshopRoot in workshopRoots.Where(Directory.Exists))
         {
-            return "pending";
+            try
+            {
+                if (Directory.EnumerateFiles(workshopRoot, "*", SearchOption.AllDirectories)
+                    .Any(file => file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase) ||
+                                 file.EndsWith(".bsp", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return "installed";
+                }
+            }
+            catch (IOException)
+            {
+                // CS2 may be replacing a payload while its state is polled. Retry on the next refresh.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // A transient read restriction must not turn a running download into an API failure.
+            }
         }
-        catch (UnauthorizedAccessException)
-        {
-            return "pending";
-        }
+
+        return "pending";
     }
 
     private static string DeriveMapName(string title, string publishedFileId)
