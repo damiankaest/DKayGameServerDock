@@ -14,7 +14,7 @@ public static class ServerStateMachine
             [ServerStatus.Stopping] = [ServerStatus.Stopped, ServerStatus.Crashed, ServerStatus.Error],
             [ServerStatus.Updating] = [ServerStatus.Stopped, ServerStatus.Error],
             [ServerStatus.Crashed] = [ServerStatus.Starting, ServerStatus.Stopped, ServerStatus.Updating],
-            [ServerStatus.Error] = [ServerStatus.Installing, ServerStatus.Stopped, ServerStatus.Updating]
+            [ServerStatus.Error] = [ServerStatus.Installing, ServerStatus.Stopped, ServerStatus.Starting, ServerStatus.Updating]
         };
 
     public static bool CanTransition(ServerStatus from, ServerStatus to) =>
@@ -28,4 +28,3 @@ public static class ServerStateMachine
         }
     }
 }
-

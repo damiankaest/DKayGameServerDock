@@ -7,7 +7,7 @@
       <div class="server-title"><span class="game-icon xlarge">{{ current.templateIcon }}</span><div><p class="eyebrow">{{ current.templateName }}</p><h1>{{ current.name }}</h1><p class="muted">LAN :{{ current.port }} · PID {{ current.process.processId || '—' }}</p></div></div>
       <div class="detail-actions"><span class="status large" [attr.data-status]="current.status">{{ current.status }}</span>
         @if (current.status === 'Running') { <button class="secondary-button" [disabled]="actioning() !== ''" (click)="action('restart')">{{ actioning() === 'restart' ? 'Restarting…' : '↻ Restart' }}</button><button class="danger-button" [disabled]="actioning() !== ''" (click)="action('stop')">{{ actioning() === 'stop' ? 'Stopping…' : '■ Stop' }}</button> }
-        @else if (current.status === 'Stopped' || current.status === 'Crashed') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starting…' : '▶ Start' }}</button> }
+        @else if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starting…' : '▶ Start' }}</button> }
         @if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="danger-button" [disabled]="actioning() !== ''" (click)="deleteServer()">{{ actioning() === 'delete' ? 'Deleting…' : 'Delete' }}</button> }
       </div>
     </header>
@@ -57,7 +57,7 @@
     } @else if (tab() === 'modes') {
       <div class="mode-workbench">
         <section class="panel full mode-intro">
-          <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' ? 'Ready to configure' : 'Stop required' }}</span></header>
+          <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Ready to configure' : 'Stop required' }}</span></header>
           <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
         </section>
 
