@@ -8,7 +8,7 @@ public sealed class Cs2LiveControlServiceTests
     private static readonly Cs2LiveSettingDescriptor BotQuotaMode = new(
         "bot_quota_mode",
         "Bot quota mode",
-        "Teams & bots",
+        "Bots",
         "select",
         "normal",
         "Bot population strategy.",
@@ -33,6 +33,18 @@ public sealed class Cs2LiveControlServiceTests
 
         Assert.False(valid);
         Assert.Empty(normalized);
+    }
+
+    [Fact]
+    public void Empty_weapon_loadout_value_can_be_read_from_cs2()
+    {
+        var read = Cs2LiveControlService.TryReadConsoleVariable(
+            "mp_t_default_primary",
+            "\"mp_t_default_primary\" = \"\"",
+            out var value);
+
+        Assert.True(read);
+        Assert.Empty(value);
     }
 
     [Fact]

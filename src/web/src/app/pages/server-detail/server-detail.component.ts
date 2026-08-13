@@ -67,7 +67,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly liveSaving = signal(false);
   readonly liveAction = signal('');
   readonly liveMessage = signal('');
-  readonly liveEditorView = signal<'recommended' | 'all'>('recommended');
+  readonly liveEditorView = signal<'map' | 'changed' | 'all'>('map');
   readonly liveQuery = signal('');
   readonly activeLiveGroup = signal('Round & match');
   readonly activeActionGroup = signal('Round');
@@ -245,20 +245,24 @@ export class ServerDetailComponent implements OnDestroy {
   liveGroupDescription(group: string): string {
     return ({
       'Round & match': 'Warmup, round duration, buy time and the overall match flow.',
-      'Teams & bots': 'Team balance, player interaction and how bots join the match.',
+      'Teams & players': 'Team balance, friendly fire, targeting and player collision.',
+      'Bots': 'Bot count, difficulty, population behavior and movement.',
       'Combat & damage': 'Enemy damage multipliers and special hit rules. Normal team modes use 1.0 for every multiplier.',
+      'Economy & loadout': 'Money, armor and weapons players receive when they spawn.',
       'Movement & physics': 'Gravity, acceleration, bunnyhop behavior and maximum movement speed.',
-      'Admin playground': 'Private practice tools such as cheats, ammunition, respawns and endless rounds.'
+      'Practice & respawn': 'Private practice tools, ammunition, respawns and endless rounds.'
     } as Record<string, string>)[group] ?? 'Runtime values for the running CS2 server.';
   }
 
   liveGroupIcon(group: string): string {
     return ({
       'Round & match': '◷',
-      'Teams & bots': 'VS',
+      'Teams & players': 'VS',
+      'Bots': 'BOT',
       'Combat & damage': 'HP',
+      'Economy & loadout': '$',
       'Movement & physics': '↗',
-      'Admin playground': '⚙'
+      'Practice & respawn': '⚙'
     } as Record<string, string>)[group] ?? '•';
   }
 
@@ -269,10 +273,19 @@ export class ServerDetailComponent implements OnDestroy {
     if (setting.key === 'sv_infinite_ammo') {
       return ({ '0': 'Off', '1': 'Infinite magazine', '2': 'Infinite reserve ammunition' } as Record<string, string>)[option] ?? option;
     }
+    if (setting.key === 'mp_free_armor') {
+      return ({ '0': 'No free armor', '1': 'Armor', '2': 'Armor and helmet' } as Record<string, string>)[option] ?? option;
+    }
+    if (setting.key === 'bot_join_team') {
+      return ({ any: 'Either team', t: 'Terrorists', ct: 'Counter-Terrorists' } as Record<string, string>)[option] ?? option;
+    }
+    if (setting.key.includes('default_primary') || setting.key.includes('default_secondary')) {
+      return option ? option.replace('weapon_', '').toUpperCase() : 'None';
+    }
     return option;
   }
 
-  setLiveEditorView(view: 'recommended' | 'all'): void {
+  setLiveEditorView(view: 'map' | 'changed' | 'all'): void {
     this.liveEditorView.set(view);
     this.normalizeLiveGroup();
   }
@@ -294,11 +307,16 @@ export class ServerDetailComponent implements OnDestroy {
     const settings = this.liveControl()?.settings ?? [];
     if (this.liveEditorView() === 'all') return settings;
 
+    if (this.liveEditorView() === 'changed') {
+      return settings.filter(setting => this.isLiveSettingDirty(setting.key) || this.liveSettingDiffersFromPreset(setting.key));
+    }
+
     const presetId = this.activeModeProfile()?.presetId ?? 'classic';
     const relevantGroups = presetId === 'surf' || presetId === 'kz' || presetId === 'bhop' || presetId === 'scoutzknivez'
-      ? new Set(['Round & match', 'Teams & bots', 'Combat & damage', 'Movement & physics'])
-      : new Set(['Round & match', 'Teams & bots', 'Combat & damage', 'Admin playground']);
-    return settings.filter(setting => relevantGroups.has(setting.group));
+      ? new Set(['Round & match', 'Teams & players', 'Bots', 'Combat & damage', 'Movement & physics', 'Economy & loadout'])
+      : new Set(['Round & match', 'Teams & players', 'Bots', 'Combat & damage', 'Economy & loadout', 'Practice & respawn']);
+    const presetValues = this.activePresetValues();
+    return settings.filter(setting => relevantGroups.has(setting.group) || setting.key in presetValues);
   }
 
   private normalizeLiveGroup(): void {
@@ -422,6 +440,78 @@ export class ServerDetailComponent implements OnDestroy {
     if (setting.type === 'boolean') return value === '1' ? 'ON' : 'OFF';
     if (setting.type === 'select') return this.liveOptionLabel(setting, value);
     return value;
+  }
+
+  activePresetValues(): Record<string, string> {
+    const profile = this.activeModeProfile();
+    const preset = this.modeCatalog()?.presets.find(item => item.id === profile?.presetId);
+    if (!profile || !preset) return {};
+    const values: Record<string, string> = Object.fromEntries(preset.settings.map(setting => [setting.key, setting.defaultValue]));
+    Object.assign(values, profile.overrides, {
+      bot_quota: String(profile.botQuota),
+      bot_difficulty: String(profile.botDifficulty),
+      bot_quota_mode: 'fill'
+    });
+
+    const peaceful = profile.combatMode === 'peaceful';
+    const ffa = profile.combatMode === 'ffa';
+    Object.assign(values, {
+      mp_friendlyfire: ffa ? '1' : '0',
+      mp_teammates_are_enemies: ffa ? '1' : '0',
+      mp_damage_scale_ct_head: peaceful ? '0' : '1',
+      mp_damage_scale_ct_body: peaceful ? '0' : '1',
+      mp_damage_scale_t_head: peaceful ? '0' : '1',
+      mp_damage_scale_t_body: peaceful ? '0' : '1',
+      mp_damage_headshot_only: '0',
+      sv_infinite_ammo: profile.ammoMode === 'infinite-magazine' ? '1' : profile.ammoMode === 'infinite-reserve' ? '2' : '0',
+      mp_respawn_on_death_t: profile.respawnMode === 'instant' ? '1' : '0',
+      mp_respawn_on_death_ct: profile.respawnMode === 'instant' ? '1' : '0',
+      mp_ignore_round_win_conditions: profile.respawnMode === 'instant' ? '1' : '0'
+    });
+    return values;
+  }
+
+  livePresetValue(key: string): string | undefined {
+    return this.activePresetValues()[key];
+  }
+
+  liveSettingDiffersFromPreset(key: string): boolean {
+    const expected = this.livePresetValue(key);
+    return expected !== undefined && this.liveObservedValues()[key] !== expected;
+  }
+
+  resetLiveValueToPreset(key: string): void {
+    const expected = this.livePresetValue(key);
+    if (expected !== undefined) this.setLiveValue(key, expected);
+  }
+
+  resetAllLiveValuesToPreset(): void {
+    for (const [key, value] of Object.entries(this.activePresetValues())) {
+      if (key in this.liveValues()) this.setLiveValue(key, value);
+    }
+  }
+
+  livePresetDriftCount(): number {
+    return this.liveControl()?.settings.filter(setting => this.liveSettingDiffersFromPreset(setting.key)).length ?? 0;
+  }
+
+  liveSummaryValue(kind: 'map' | 'profile' | 'players' | 'bots' | 'combat' | 'respawn' | 'movement' | 'hud'): string {
+    const values = this.liveObservedValues();
+    if (kind === 'map') return this.server()?.currentMap || 'Not reported';
+    if (kind === 'profile') return this.activeModeProfile()?.presetName || 'No profile';
+    if (kind === 'players') return String(this.server()?.players.length ?? 0);
+    if (kind === 'bots') return `${values['bot_quota'] ?? '—'} · level ${values['bot_difficulty'] ?? '—'}`;
+    if (kind === 'combat') return this.activeCombatMode() === 'ffa' ? 'Free for all' : this.activeCombatMode() === 'peaceful' ? 'Peaceful' : 'CT vs T';
+    if (kind === 'respawn') return this.activeRespawnMode() === 'instant' ? 'Instant' : this.activeRespawnMode() === 'round' ? 'Round based' : 'Mixed';
+    if (kind === 'movement') return this.activeBhopMode() === 'enabled' ? 'Auto-bhop on' : this.activeBhopMode() === 'disabled' ? 'Normal jumping' : 'Custom';
+    return this.activeHudMode() === 'hidden' ? 'Clean' : this.activeHudMode() === 'timer' ? 'Timer only' : 'Movement HUD';
+  }
+
+  openLiveGroup(group: string): void {
+    this.liveEditorView.set('all');
+    this.activeLiveGroup.set(group);
+    this.liveQuery.set('');
+    queueMicrotask(() => document.querySelector('.live-config-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
   livePolicyObserved(policy: 'combat' | 'bhop' | 'respawn' | 'hud'): boolean {

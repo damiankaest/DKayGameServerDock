@@ -191,10 +191,11 @@ public sealed class Cs2RuntimeProvisionerTests
             provisioner.Prepare(server);
 
             var liveConfig = File.ReadAllText(liveConfigPath);
-            Assert.Contains("sv_cheats 1", liveConfig, StringComparison.Ordinal);
-            Assert.Contains("sv_maxvelocity 10000", liveConfig, StringComparison.Ordinal);
-            Assert.Contains("mp_warmuptime 180", liveConfig, StringComparison.Ordinal);
-            Assert.Contains("bot_quota_mode fill", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("sv_cheats \"1\"", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("sv_maxvelocity \"10000\"", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("mp_warmuptime \"180\"", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("bot_quota_mode \"fill\"", liveConfig, StringComparison.Ordinal);
+            Assert.Contains("mp_t_default_primary \"\"", liveConfig, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(root, ".dkay", "live-settings.json")));
         }
         finally

@@ -761,7 +761,7 @@ public sealed partial class Cs2LiveControlService(
 
         var match = Regex.Match(
             output,
-            $"(?:^|[\\r\\n\\s])\\\"?{Regex.Escape(key)}\\\"?\\s*=\\s*\\\"?(?<value>[^\\\"\\s\\(\\r\\n]+)",
+            $"(?:^|[\\r\\n\\s])\\\"?{Regex.Escape(key)}\\\"?\\s*=\\s*\\\"?(?<value>[^\\\"\\s\\(\\r\\n]*)",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
         if (!match.Success)
         {
