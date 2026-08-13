@@ -207,7 +207,12 @@ export interface Cs2ModePreset {
   mapPrefixes: string[];
   recommendedPackageIds: string[];
   settings: Cs2ConVar[];
+  defaultCombatMode: Cs2CombatMode;
+  defaultAmmoMode: Cs2AmmoMode;
 }
+
+export type Cs2CombatMode = 'peaceful' | 'team' | 'ffa';
+export type Cs2AmmoMode = 'standard' | 'infinite-magazine' | 'infinite-reserve';
 
 export interface Cs2ManagedPackage {
   id: string;
@@ -237,6 +242,8 @@ export interface Cs2ModeProfile {
   workshopInstallState: 'local' | 'pending' | 'installed';
   botQuota: number;
   botDifficulty: number;
+  combatMode: Cs2CombatMode;
+  ammoMode: Cs2AmmoMode;
   overrides: Record<string, string>;
   recommendedPackageIds: string[];
   updatedAt: string;
@@ -293,6 +300,8 @@ export interface ApplyCs2ModePresetRequest {
   botDifficulty: number;
   installRecommendedPackages: boolean;
   overrides: Record<string, string>;
+  combatMode: Cs2CombatMode;
+  ammoMode: Cs2AmmoMode;
 }
 
 export interface Cs2ModeApplyResult {

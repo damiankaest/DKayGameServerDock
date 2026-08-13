@@ -76,6 +76,125 @@ public sealed class Cs2ModeCatalogTests
         Assert.Equal("1", result["mp_ignore_round_win_conditions"]);
         Assert.Equal("1", result["mp_autoteambalance"]);
         Assert.Equal("1", result["mp_limitteams"]);
+        Assert.Equal("0", result["sv_infinite_ammo"]);
+    }
+
+    [Theory]
+    [InlineData("bhop", "team", "0", "0", "1")]
+    [InlineData("bhop", "ffa", "1", "1", "1")]
+    [InlineData("rpg-arena", "peaceful", "0", "0", "0")]
+    public void Combat_policy_is_configurable_independently_from_preset(
+        string presetId,
+        string combatMode,
+        string friendlyFire,
+        string teammatesAreEnemies,
+        string damageScale)
+    {
+        var preset = Cs2ModeCatalog.Presets.Single(item => item.Id == presetId);
+        var result = Cs2ModeCatalog.BuildConVars(
+            preset,
+            new ApplyCs2ModePresetRequest(
+                preset.Id,
+                presetId == "bhop" ? "bhop_test" : "fy_pool_day",
+                null,
+                0,
+                1,
+                false,
+                new Dictionary<string, string>(),
+                combatMode,
+                "standard"));
+
+        Assert.Equal(friendlyFire, result["mp_friendlyfire"]);
+        Assert.Equal(teammatesAreEnemies, result["mp_teammates_are_enemies"]);
+        Assert.Equal(damageScale, result["mp_damage_scale_ct_body"]);
+        Assert.Equal(damageScale, result["mp_damage_scale_t_head"]);
+        Assert.Equal("0", result["sv_infinite_ammo"]);
+    }
+
+    [Theory]
+    [InlineData("standard", "0", "0")]
+    [InlineData("infinite-reserve", "2", "0")]
+    [InlineData("infinite-magazine", "1", "1")]
+    public void Ammo_policy_controls_cs2_and_sharptimer_independently(
+        string ammoMode,
+        string infiniteAmmo,
+        string sharpTimerInfiniteAmmo)
+    {
+        var preset = Cs2ModeCatalog.Presets.Single(item => item.Id == "bhop");
+        var result = Cs2ModeCatalog.BuildConVars(
+            preset,
+            new ApplyCs2ModePresetRequest(
+                preset.Id,
+                "bhop_test",
+                null,
+                0,
+                1,
+                false,
+                new Dictionary<string, string>(),
+                "team",
+                ammoMode));
+        var sharpTimer = Cs2ModeCatalog.BuildSharpTimerCombatCommands("team", ammoMode);
+
+        Assert.Equal(infiniteAmmo, result["sv_infinite_ammo"]);
+        Assert.Equal(sharpTimerInfiniteAmmo, sharpTimer["sharptimer_apply_infinite_ammo"]);
+        Assert.Equal("0", sharpTimer["sharptimer_remove_damage"]);
+    }
+
+    [Fact]
+    public async Task Active_combat_policy_is_reapplied_after_sharptimer_without_overwriting_custom_config()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-sharptimer-combat-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        var markerRoot = Path.Combine(root, "game", "csgo", "addons", ".dkay");
+        var sharpTimerRoot = Path.Combine(root, "game", "csgo", "cfg", "SharpTimer");
+        var mapExecRoot = Path.Combine(sharpTimerRoot, "MapData", "MapExecs");
+        Directory.CreateDirectory(markerRoot);
+        Directory.CreateDirectory(mapExecRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(markerRoot, "sharp-timer.json"),
+            "{\"installed\":true,\"version\":\"test\",\"installedAt\":\"2026-01-01T00:00:00Z\"}");
+        var customExecPath = Path.Combine(sharpTimerRoot, "custom_exec.cfg");
+        await File.WriteAllTextAsync(customExecPath, "// administrator setting\nsv_staminamax 0\n");
+        var mapExecPath = Path.Combine(mapExecRoot, "example.bhop_.cfg");
+        await File.WriteAllTextAsync(mapExecPath, "// upstream movement settings\nsv_airaccelerate 1000\nsharptimer_remove_damage true\n");
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            var manager = new Cs2ModeManager(httpClient);
+            var request = new ApplyCs2ModePresetRequest(
+                "bhop",
+                "bhop_test",
+                null,
+                0,
+                1,
+                false,
+                new Dictionary<string, string>(),
+                "team",
+                "standard");
+
+            await manager.ApplyPresetAsync(server, request, CancellationToken.None);
+            await manager.ApplyPresetAsync(server, request, CancellationToken.None);
+
+            var combatConfig = await File.ReadAllTextAsync(Path.Combine(root, "game", "csgo", "cfg", "dkay-combat.cfg"));
+            Assert.Contains("mp_damage_scale_t_body 1", combatConfig);
+            Assert.Contains("sv_infinite_ammo 0", combatConfig);
+            Assert.Contains("sharptimer_remove_damage 0", combatConfig);
+            Assert.Contains("sharptimer_apply_infinite_ammo 0", combatConfig);
+
+            var customExec = await File.ReadAllTextAsync(customExecPath);
+            Assert.Contains("sv_staminamax 0", customExec);
+            Assert.Equal(1, customExec.Split("exec dkay-combat.cfg", StringSplitOptions.None).Length - 1);
+
+            var mapExec = await File.ReadAllTextAsync(mapExecPath);
+            Assert.Contains("sv_airaccelerate 1000", mapExec);
+            Assert.EndsWith("exec dkay-combat.cfg\n", mapExec.Replace("\r\n", "\n", StringComparison.Ordinal));
+            Assert.Equal(1, mapExec.Split("exec dkay-combat.cfg", StringSplitOptions.None).Length - 1);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Theory]

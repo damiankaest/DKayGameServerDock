@@ -57,7 +57,8 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
         try
         {
             Cs2ModeCatalog.ValidateMap(profile.MapName, profile.WorkshopId);
-            return profile;
+            var preset = Presets.FirstOrDefault(item => string.Equals(item.Id, profile.PresetId, StringComparison.Ordinal));
+            return preset is null ? null : NormalizeProfile(profile, preset);
         }
         catch (ArgumentException)
         {
@@ -78,6 +79,8 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
     {
         var preset = Presets.FirstOrDefault(item => string.Equals(item.Id, request.PresetId, StringComparison.Ordinal))
             ?? throw new ArgumentException($"Unknown CS2 preset '{request.PresetId}'.");
+        var combatMode = Cs2ModeCatalog.ResolveCombatMode(preset, request.CombatMode);
+        var ammoMode = Cs2ModeCatalog.ResolveAmmoMode(preset, request.AmmoMode);
         var convars = Cs2ModeCatalog.BuildConVars(preset, request);
         var workshopId = string.IsNullOrWhiteSpace(request.WorkshopId) ? null : request.WorkshopId.Trim();
         Cs2WorkshopMap? workshopMap = null;
@@ -106,7 +109,9 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
             request.BotDifficulty,
             normalizedOverrides,
             preset.RecommendedPackageIds,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            combatMode,
+            ammoMode);
 
         var cfgRoot = GetCfgRoot(server);
         await WriteProfileConfigurationAsync(server, profile, preset, convars, cancellationToken);
@@ -117,7 +122,8 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                 $"exec dkay/maps/{profileId}.cfg"
             ],
             cancellationToken);
-        AlignLiveSettingsWithPreset(server, preset, convars);
+        await WriteActiveCombatConfigurationAsync(server, profile, preset, cancellationToken);
+        AlignLiveSettingsWithPreset(server, convars);
 
         var document = ReadModeDocument(server);
         var profiles = document.Profiles.Where(item => item.Id != profile.Id).Append(profile).OrderBy(item => item.MapName).ToArray();
@@ -145,6 +151,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
 
         var preset = Presets.FirstOrDefault(item => string.Equals(item.Id, profile.PresetId, StringComparison.Ordinal))
             ?? throw new InvalidDataException($"The saved CS2 preset '{profile.PresetId}' is no longer available.");
+        profile = NormalizeProfile(profile, preset);
         var convars = BuildProfileConVars(profile, preset);
         await WriteProfileConfigurationAsync(server, profile, preset, convars, cancellationToken);
 
@@ -155,10 +162,14 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                 $"exec dkay/maps/{expectedProfileId}.cfg"
             ],
             cancellationToken);
-        AlignLiveSettingsWithPreset(server, preset, convars);
+        await WriteActiveCombatConfigurationAsync(server, profile, preset, cancellationToken);
+        AlignLiveSettingsWithPreset(server, convars);
+        var profiles = document.Profiles
+            .Select(item => string.Equals(item.Id, profile.Id, StringComparison.Ordinal) ? profile : item)
+            .ToArray();
         await WriteJsonAtomicallyAsync(
             GetModeDocumentPath(server),
-            document with { ActiveProfileId = profile.Id },
+            document with { ActiveProfileId = profile.Id, Profiles = profiles },
             cancellationToken);
         return profile;
     }
@@ -286,11 +297,13 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                 continue;
             }
 
-            var convars = BuildProfileConVars(profile, preset);
-            await WriteProfileConfigurationAsync(server, profile, preset, convars, cancellationToken);
+            var normalizedProfile = NormalizeProfile(profile, preset);
+            var convars = BuildProfileConVars(normalizedProfile, preset);
+            await WriteProfileConfigurationAsync(server, normalizedProfile, preset, convars, cancellationToken);
             if (string.Equals(profile.Id, document.ActiveProfileId, StringComparison.Ordinal))
             {
-                AlignLiveSettingsWithPreset(server, preset, convars);
+                await WriteActiveCombatConfigurationAsync(server, normalizedProfile, preset, cancellationToken);
+                AlignLiveSettingsWithPreset(server, convars);
             }
         }
     }
@@ -346,6 +359,11 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
             }
 
             await WritePackageMarkerAsync(server, new PackageMarker(true, download.Version, DateTimeOffset.UtcNow), packageId, cancellationToken);
+            if (packageId == "sharp-timer" && GetActiveProfile(server) is { } activeProfile)
+            {
+                var activePreset = Presets.Single(item => item.Id == activeProfile.PresetId);
+                await WriteActiveCombatConfigurationAsync(server, activeProfile, activePreset, cancellationToken);
+            }
             await reportProgress(new InstallationProgress(100, "complete", $"{package.Name} {download.Version} installed."), cancellationToken);
         }
         finally
@@ -370,11 +388,16 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
 
     private Cs2ModeState BuildState(GameServerInstance server, ModeDocument document)
     {
-        var profiles = document.Profiles.Select(profile => profile with
+        var profiles = document.Profiles.Select(profile =>
         {
-            WorkshopInstallState = profile.WorkshopId is null
-                ? "local"
-                : GetWorkshopInstallState(server, profile.WorkshopId)
+            var preset = Presets.FirstOrDefault(item => item.Id == profile.PresetId);
+            var normalized = preset is null ? profile : NormalizeProfile(profile, preset);
+            return normalized with
+            {
+                WorkshopInstallState = normalized.WorkshopId is null
+                    ? "local"
+                    : GetWorkshopInstallState(server, normalized.WorkshopId)
+            };
         }).ToArray();
         var packageStates = Packages.Select(package =>
         {
@@ -870,7 +893,18 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                 profile.BotQuota,
                 profile.BotDifficulty,
                 false,
-                profile.Overrides));
+                profile.Overrides,
+                profile.CombatMode,
+                profile.AmmoMode));
+
+    private static Cs2ModeProfile NormalizeProfile(
+        Cs2ModeProfile profile,
+        Cs2ModePresetDescriptor preset) =>
+        profile with
+        {
+            CombatMode = Cs2ModeCatalog.ResolveCombatMode(preset, profile.CombatMode),
+            AmmoMode = Cs2ModeCatalog.ResolveAmmoMode(preset, profile.AmmoMode)
+        };
 
     private static async Task WriteProfileConfigurationAsync(
         GameServerInstance server,
@@ -896,16 +930,98 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
             cancellationToken);
     }
 
+    private async Task WriteActiveCombatConfigurationAsync(
+        GameServerInstance server,
+        Cs2ModeProfile profile,
+        Cs2ModePresetDescriptor preset,
+        CancellationToken cancellationToken)
+    {
+        var combatMode = Cs2ModeCatalog.ResolveCombatMode(preset, profile.CombatMode);
+        var ammoMode = Cs2ModeCatalog.ResolveAmmoMode(preset, profile.AmmoMode);
+        var lines = new List<string>
+        {
+            "// Generated by DKay Game Server Dock. Applied after map and plugin configuration.",
+            $"// Combat: {combatMode}; ammunition: {ammoMode}"
+        };
+        lines.AddRange(Cs2ModeCatalog.BuildCombatConVars(combatMode, ammoMode)
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => $"{pair.Key} {FormatCfgValue(pair.Value)}"));
+
+        var sharpTimerInstalled = ReadPackageMarker(server, "sharp-timer").Installed;
+        if (sharpTimerInstalled)
+        {
+            lines.AddRange(Cs2ModeCatalog.BuildSharpTimerCombatCommands(combatMode, ammoMode)
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => $"{pair.Key} {FormatCfgValue(pair.Value)}"));
+        }
+
+        await WriteAllLinesAtomicallyAsync(
+            Path.Combine(GetCfgRoot(server), "dkay-combat.cfg"),
+            lines,
+            cancellationToken);
+
+        if (sharpTimerInstalled)
+        {
+            await EnsureSharpTimerCombatOverridesAsync(server, cancellationToken);
+        }
+    }
+
+    private static async Task EnsureSharpTimerCombatOverridesAsync(
+        GameServerInstance server,
+        CancellationToken cancellationToken)
+    {
+        var sharpTimerRoot = Path.Combine(GetCfgRoot(server), "SharpTimer");
+        await EnsureCombatExecDirectiveAsync(
+            Path.Combine(sharpTimerRoot, "custom_exec.cfg"),
+            "// DKay managed combat policy. Keep this line so mode settings win after SharpTimer config.cfg.",
+            cancellationToken);
+
+        var mapExecRoot = Path.Combine(sharpTimerRoot, "MapData", "MapExecs");
+        if (!Directory.Exists(mapExecRoot))
+        {
+            return;
+        }
+
+        foreach (var path in Directory.EnumerateFiles(mapExecRoot, "*.cfg", SearchOption.TopDirectoryOnly))
+        {
+            await EnsureCombatExecDirectiveAsync(
+                path,
+                "// DKay managed combat policy. Must remain last so this map cannot override the admin selection.",
+                cancellationToken);
+        }
+    }
+
+    private static async Task EnsureCombatExecDirectiveAsync(
+        string path,
+        string comment,
+        CancellationToken cancellationToken)
+    {
+        var lines = File.Exists(path)
+            ? (await File.ReadAllLinesAsync(path, cancellationToken)).ToList()
+            : [];
+        if (lines.Any(line => Regex.IsMatch(
+                line,
+                "^\\s*exec(?:ifexists)?\\s+\"?(?:cfg/)?dkay-combat\\.cfg\"?\\s*(?://.*)?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
+        {
+            return;
+        }
+
+        if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1]))
+        {
+            lines.Add(string.Empty);
+        }
+
+        lines.Add(comment);
+        lines.Add("exec dkay-combat.cfg");
+        await WriteAllLinesAtomicallyAsync(path, lines, cancellationToken);
+    }
+
     private void AlignLiveSettingsWithPreset(
         GameServerInstance server,
-        Cs2ModePresetDescriptor preset,
         IReadOnlyDictionary<string, string> convars)
     {
-        var presetValues = preset.Settings.ToDictionary(
-            setting => setting.Key,
-            setting => convars[setting.Key],
-            StringComparer.Ordinal);
-        runtime.AlignPersistedLiveSettingsWithPreset(server, presetValues);
+        runtime.AlignPersistedLiveSettingsWithPreset(server, convars);
     }
 
     private static string FormatCfgValue(string value)

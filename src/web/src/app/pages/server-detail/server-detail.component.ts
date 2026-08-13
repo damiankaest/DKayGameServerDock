@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
+import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -39,6 +39,8 @@ export class ServerDetailComponent implements OnDestroy {
   readonly modeWorkshopId = signal('');
   readonly modeBotQuota = signal(0);
   readonly modeBotDifficulty = signal(1);
+  readonly modeCombat = signal<Cs2CombatMode>('team');
+  readonly modeAmmo = signal<Cs2AmmoMode>('standard');
   readonly modeInstallPackages = signal(true);
   readonly modeOverrides = signal<Record<string, string>>({});
   readonly modeSaving = signal(false);
@@ -408,6 +410,8 @@ export class ServerDetailComponent implements OnDestroy {
     const preset = this.modeCatalog()?.presets.find(item => item.id === presetId);
     if (!preset) return;
     this.selectedPresetId.set(preset.id);
+    this.modeCombat.set(preset.defaultCombatMode);
+    this.modeAmmo.set(preset.defaultAmmoMode);
     this.modeOverrides.set(Object.fromEntries(
       preset.settings.filter(setting => setting.editable).map(setting => [setting.key, setting.defaultValue])
     ));
@@ -419,6 +423,8 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeWorkshopId.set(profile.workshopId ?? '');
     this.modeBotQuota.set(profile.botQuota);
     this.modeBotDifficulty.set(profile.botDifficulty);
+    this.modeCombat.set(profile.combatMode);
+    this.modeAmmo.set(profile.ammoMode);
     this.modeOverrides.update(values => ({ ...values, ...profile.overrides }));
   }
 
@@ -436,6 +442,14 @@ export class ServerDetailComponent implements OnDestroy {
 
   updateModeOverride(key: string, event: Event): void {
     this.modeOverrides.update(values => ({ ...values, [key]: (event.target as HTMLInputElement | HTMLSelectElement).value }));
+  }
+
+  updateModeCombat(event: Event): void {
+    this.modeCombat.set((event.target as HTMLSelectElement).value as Cs2CombatMode);
+  }
+
+  updateModeAmmo(event: Event): void {
+    this.modeAmmo.set((event.target as HTMLSelectElement).value as Cs2AmmoMode);
   }
 
   updateWorkshopQuery(event: Event): void {
@@ -515,7 +529,9 @@ export class ServerDetailComponent implements OnDestroy {
       botQuota: this.modeBotQuota(),
       botDifficulty: this.modeBotDifficulty(),
       installRecommendedPackages: this.modeInstallPackages(),
-      overrides: this.modeOverrides()
+      overrides: this.modeOverrides(),
+      combatMode: this.modeCombat(),
+      ammoMode: this.modeAmmo()
     }).pipe(finalize(() => {
       this.modeSaving.set(false);
       this.workshopAdding.set('');
