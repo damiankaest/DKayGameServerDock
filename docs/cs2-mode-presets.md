@@ -27,7 +27,19 @@ The shipped values are safe, practical starting points. There is no single unive
 
 The numeric Workshop-ID field remains an advanced fallback. Directly entered IDs receive the same server-side validation and are rejected before a config is written when Steam reports the item removed, private, a collection or unavailable. A Workshop page that still has an old title is not proof that its payload works in CS2; for example, old CS:GO BSP-only uploads may be explicitly marked incompatible by Steam.
 
-The guest portal displays the active preset and map but never exposes the Workshop ID, filesystem paths, package inventory or configuration values.
+The guest portal displays the active preset, current players, configured maps, play history and the ten fastest SharpTimer records per map. It reads SharpTimer's local `database.db` or JSON `PlayerRecords` files in read-only mode and never publishes Steam IDs, filesystem paths, package inventory or configuration values.
+
+## Timer and practice ownership
+
+Timer and checkpoint actions belong to the player inside CS2, not to the browser. With SharpTimer installed, players use `!cp`, `!tp`, `!prevcp`, `!nextcp` and `!r`; `!top` and `!rank` show the saved records. The **Modes & maps** profile and **Live control** page only choose the policy for the active map:
+
+| Policy | In-game behavior |
+|---|---|
+| Timer only | Timer, stages and rankings stay active; checkpoint commands are disabled |
+| Ground checkpoints | `!cp`/`!tp` are enabled with SharpTimer's normal safety restrictions |
+| Surf practice | Checkpoints may be saved in the air with current velocity |
+
+Surf defaults to **Surf practice**, Bhop defaults to **Ground checkpoints**, and non-movement presets default to **Timer only**. Replay recording and the server-record replay bot remain disabled, and the managed HUD refresh rate is limited to 16 updates per second for small home-server CPUs. The browser never stores or attempts to reproduce a player's checkpoint position.
 
 ## Generated files
 

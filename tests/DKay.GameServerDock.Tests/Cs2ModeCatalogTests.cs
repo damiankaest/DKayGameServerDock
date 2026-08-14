@@ -10,6 +10,26 @@ namespace DKay.GameServerDock.Tests;
 
 public sealed class Cs2ModeCatalogTests
 {
+    [Theory]
+    [InlineData("disabled", "0", "0")]
+    [InlineData("ground", "1", "0")]
+    [InlineData("anywhere", "1", "1")]
+    public void BuildSharpTimerPracticeCommands_keeps_practice_inside_the_game(
+        string practiceMode,
+        string checkpointsEnabled,
+        string unrestricted)
+    {
+        var commands = Cs2ModeCatalog.BuildSharpTimerPracticeCommands(practiceMode);
+
+        Assert.Equal(checkpointsEnabled, commands["sharptimer_checkpoints_enabled"]);
+        Assert.Equal(unrestricted, commands["sharptimer_remove_checkpoints_restrictions"]);
+        Assert.Equal("1", commands["sharptimer_top_enabled"]);
+        Assert.Equal("1", commands["sharptimer_rank_enabled"]);
+        Assert.Equal("0", commands["sharptimer_replays_enabled"]);
+        Assert.Equal("0", commands["sharptimer_replay_bot_enabled"]);
+        Assert.Equal("16", commands["sharptimer_hud_updates_per_second"]);
+    }
+
     [Fact]
     public void BuildConVars_AppliesOnlyAllowedOverridesAndBotSettings()
     {

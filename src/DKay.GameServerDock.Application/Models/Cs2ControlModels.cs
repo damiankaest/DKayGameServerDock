@@ -40,6 +40,8 @@ public sealed record Cs2LiveControlState(
     Cs2MapChangeState MapChange,
     string ActiveHudMode,
     bool HudLiveReadSucceeded,
+    string ActivePracticeMode,
+    bool PracticeLiveReadSucceeded,
     bool SharpTimerInstalled);
 
 public sealed record Cs2MapChangeState(

@@ -41,6 +41,9 @@ public sealed partial class Cs2LiveControlService(
         new("hud-hidden", "Clean screen", "Hide the SharpTimer timer, keys, speed and sync display.", "Display", "○", RequiresPlugin: true),
         new("hud-timer", "Timer only", "Show run and map timing without movement telemetry.", "Display", "◷", RequiresPlugin: true),
         new("hud-movement", "Movement HUD", "Show timing, keys, velocity and strafe sync.", "Display", "HUD", RequiresPlugin: true),
+        new("practice-disabled", "Timer only", "Keep timer and rankings active, but disable player checkpoint commands.", "Practice", "T", RequiresPlugin: true),
+        new("practice-ground", "Ground checkpoints", "Allow !cp and !tp while keeping SharpTimer's safe checkpoint restrictions.", "Practice", "CP", RequiresPlugin: true),
+        new("practice-anywhere", "Surf practice", "Allow in-air checkpoints that preserve the player's current speed.", "Practice", "AIR", RequiresPlugin: true),
         new("rtv", "Start RTV vote", "Ask a compatible CounterStrikeSharp map-vote plugin to start RTV.", "Maps", "☑", RequiresPlugin: true)
     ];
 
@@ -83,7 +86,9 @@ public sealed partial class Cs2LiveControlService(
         var activeProfile = modeState.Profiles.FirstOrDefault(profile =>
             string.Equals(profile.Id, modeState.ActiveProfileId, StringComparison.Ordinal));
         var activeHudMode = activeProfile?.HudMode ?? "hidden";
+        var activePracticeMode = activeProfile?.PracticeMode ?? "disabled";
         var hudLiveReadSucceeded = false;
+        var practiceLiveReadSucceeded = false;
         var sharpTimerInstalled = modeState.Packages.Any(package =>
             string.Equals(package.Id, "sharp-timer", StringComparison.Ordinal) && package.Installed);
 
@@ -135,15 +140,23 @@ public sealed partial class Cs2LiveControlService(
             {
                 try
                 {
+                    var sharpTimerValues = BuildHudLiveValues("movement")
+                        .Concat(BuildPracticeLiveValues("anywhere"))
+                        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
                     var hudResult = await adapter.ExecuteConsoleCommandAsync(
                         server,
                         processes,
-                        adapter.NormalizeConsoleCommand(BuildVerificationCommand(BuildHudLiveValues("movement"))),
+                        adapter.NormalizeConsoleCommand(BuildVerificationCommand(sharpTimerValues)),
                         cancellationToken);
                     if (TryResolveReportedHudMode(hudResult.Output, out var reportedHudMode))
                     {
                         activeHudMode = reportedHudMode;
                         hudLiveReadSucceeded = true;
+                    }
+                    if (TryResolveReportedPracticeMode(hudResult.Output, out var reportedPracticeMode))
+                    {
+                        activePracticeMode = reportedPracticeMode;
+                        practiceLiveReadSucceeded = true;
                     }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
@@ -167,6 +180,8 @@ public sealed partial class Cs2LiveControlService(
             liveValueKeys,
             activeHudMode,
             hudLiveReadSucceeded,
+            activePracticeMode,
+            practiceLiveReadSucceeded,
             sharpTimerInstalled);
     }
 
@@ -232,6 +247,7 @@ public sealed partial class Cs2LiveControlService(
         var combatMode = ResolveCombatModeAction(request.ActionId);
         var respawnMode = ResolveRespawnModeAction(request.ActionId);
         var hudMode = ResolveHudModeAction(request.ActionId);
+        var practiceMode = ResolvePracticeModeAction(request.ActionId);
         if (request.ActionId == "repair-team-damage")
         {
             var savedState = await modes.GetStateAsync(server, cancellationToken);
@@ -240,16 +256,16 @@ public sealed partial class Cs2LiveControlService(
                 ?? throw new InvalidOperationException("Select and activate a map profile before reapplying its combat mode.");
         }
         var sharpTimerInstalled = false;
-        if (combatMode is not null || hudMode is not null)
+        if (combatMode is not null || hudMode is not null || practiceMode is not null)
         {
             var modeState = await modes.GetStateAsync(server, cancellationToken);
             sharpTimerInstalled = modeState.Packages.Any(package =>
                 string.Equals(package.Id, "sharp-timer", StringComparison.Ordinal) && package.Installed);
         }
 
-        if (hudMode is not null && !sharpTimerInstalled)
+        if ((hudMode is not null || practiceMode is not null) && !sharpTimerInstalled)
         {
-            throw new InvalidOperationException("Install SharpTimer before changing its in-game HUD.");
+            throw new InvalidOperationException("Install SharpTimer before changing its in-game timer or practice policy.");
         }
 
         if (combatMode is not null)
@@ -287,12 +303,18 @@ public sealed partial class Cs2LiveControlService(
             await modes.SetActiveHudModeAsync(server, hudMode, cancellationToken);
         }
 
+        if (practiceMode is not null)
+        {
+            await modes.SetActivePracticeModeAsync(server, practiceMode, cancellationToken);
+        }
+
         var command = request.ActionId switch
         {
             "change-map" => BuildChangeMapCommand(request.Value),
             _ when combatMode is not null => BuildCombatApplyCommand(combatMode, sharpTimerInstalled),
             _ when respawnMode is not null => BuildApplyCommand(BuildRespawnLiveValues(respawnMode)),
             _ when hudMode is not null => BuildApplyCommand(BuildHudLiveValues(hudMode)),
+            _ when practiceMode is not null => BuildApplyCommand(BuildPracticeLiveValues(practiceMode)),
             _ when ActionCommands.TryGetValue(request.ActionId, out var knownCommand) => knownCommand,
             _ => throw new InvalidOperationException($"Unknown CS2 quick action '{request.ActionId}'.")
         };
@@ -363,6 +385,7 @@ public sealed partial class Cs2LiveControlService(
                 "disable-bhop" => BuildBhopLiveValues(false),
                 _ when respawnMode is not null => BuildRespawnLiveValues(respawnMode),
                 _ when hudMode is not null => BuildHudLiveValues(hudMode),
+                _ when practiceMode is not null => BuildPracticeVerificationValues(practiceMode),
                 _ => null
             };
             if (expectedValues is not null)
@@ -381,6 +404,7 @@ public sealed partial class Cs2LiveControlService(
                 }
 
                 var policy = hudMode is not null ? $"HUD mode '{hudMode}'"
+                    : practiceMode is not null ? $"in-game practice mode '{practiceMode}'"
                     : respawnMode is not null ? $"respawn mode '{respawnMode}'"
                     : request.ActionId == "enable-bhop" ? "auto-bhop enabled" : "auto-bhop disabled";
                 result = result with { Output = $"Live {policy} applied and verified." };
@@ -421,6 +445,14 @@ public sealed partial class Cs2LiveControlService(
         "hud-hidden" => "hidden",
         "hud-timer" => "timer",
         "hud-movement" => "movement",
+        _ => null
+    };
+
+    internal static string? ResolvePracticeModeAction(string actionId) => actionId switch
+    {
+        "practice-disabled" => "disabled",
+        "practice-ground" => "ground",
+        "practice-anywhere" => "anywhere",
         _ => null
     };
 
@@ -466,6 +498,57 @@ public sealed partial class Cs2LiveControlService(
             ["sharptimer_enable_map_tier_hud"] = timerVisible,
             ["sharptimer_enable_map_type_hud"] = timerVisible,
             ["sharptimer_enable_map_name_hud"] = timerVisible
+        };
+    }
+
+    internal static IReadOnlyDictionary<string, string> BuildPracticeLiveValues(string practiceMode)
+    {
+        if (practiceMode is not ("disabled" or "ground" or "anywhere"))
+        {
+            throw new ArgumentException("Practice mode must be disabled, ground or anywhere.", nameof(practiceMode));
+        }
+
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sharptimer_checkpoints_enabled"] = practiceMode == "disabled" ? "0" : "1",
+            ["sharptimer_remove_checkpoints_restrictions"] = practiceMode == "anywhere" ? "1" : "0",
+            ["sharptimer_checkpoints_only_when_timer_stopped"] = "0",
+            ["sharptimer_respawn_enabled"] = "1",
+            ["sharptimer_top_enabled"] = "1",
+            ["sharptimer_rank_enabled"] = "1",
+            ["sharptimer_stage_times_enabled"] = "1",
+            ["sharptimer_stage_sr_enabled"] = "1",
+            ["sharptimer_connect_commands_msg_enabled"] = "1",
+            ["sharptimer_replays_enabled"] = "0",
+            ["sharptimer_replay_bot_enabled"] = "0",
+            ["sharptimer_hud_updates_per_second"] = "16"
+        };
+    }
+
+    internal static bool TryResolveReportedPracticeMode(string? output, out string practiceMode)
+    {
+        practiceMode = string.Empty;
+        if (!TryReadConsoleVariable("sharptimer_checkpoints_enabled", output, out var checkpoints) ||
+            !TryReadConsoleVariable("sharptimer_remove_checkpoints_restrictions", output, out var unrestricted))
+        {
+            return false;
+        }
+
+        practiceMode = !ConsoleValuesMatch("1", checkpoints)
+            ? "disabled"
+            : ConsoleValuesMatch("1", unrestricted)
+                ? "anywhere"
+                : "ground";
+        return true;
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildPracticeVerificationValues(string practiceMode)
+    {
+        var values = BuildPracticeLiveValues(practiceMode);
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sharptimer_checkpoints_enabled"] = values["sharptimer_checkpoints_enabled"],
+            ["sharptimer_remove_checkpoints_restrictions"] = values["sharptimer_remove_checkpoints_restrictions"]
         };
     }
 
@@ -683,6 +766,8 @@ public sealed partial class Cs2LiveControlService(
         IReadOnlySet<string> liveValueKeys,
         string activeHudMode,
         bool hudLiveReadSucceeded,
+        string activePracticeMode,
+        bool practiceLiveReadSucceeded,
         bool sharpTimerInstalled) => new(
             running,
             liveReadSucceeded,
@@ -696,6 +781,8 @@ public sealed partial class Cs2LiveControlService(
             mapChanges.GetState(server.Id),
             activeHudMode,
             hudLiveReadSucceeded,
+            activePracticeMode,
+            practiceLiveReadSucceeded,
             sharpTimerInstalled);
 
     internal static IReadOnlyList<string> BuildLiveReadCommands(

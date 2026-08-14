@@ -30,6 +30,10 @@ public interface ICs2ModeManager
         GameServerInstance server,
         string hudMode,
         CancellationToken cancellationToken);
+    Task<Cs2ModeProfile> SetActivePracticeModeAsync(
+        GameServerInstance server,
+        string practiceMode,
+        CancellationToken cancellationToken);
     Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server);
     Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key);
     Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(

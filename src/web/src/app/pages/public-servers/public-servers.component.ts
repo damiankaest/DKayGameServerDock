@@ -55,6 +55,11 @@ export class PublicServersComponent implements OnDestroy {
       .catch(() => this.copyError.set('Copy failed. Select the address and copy it manually.'));
   }
 
+  join(address: string): void {
+    // Use a direct user gesture so browsers are allowed to hand the custom protocol to Steam.
+    window.location.href = `steam://connect/${address}`;
+  }
+
   onlineCount(listing: PublicServerList): number {
     return listing.servers.filter(server => server.status === 'Running').length;
   }
@@ -64,6 +69,14 @@ export class PublicServersComponent implements OnDestroy {
     return Number.isNaN(date.getTime())
       ? value
       : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  formatPlayed(value: string | null): string {
+    if (!value) return 'not played yet';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
   formatConnected(value: string | null): string {

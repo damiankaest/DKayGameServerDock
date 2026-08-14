@@ -60,9 +60,9 @@ Only add a game's rule after that individual server has been published in the Do
 2. Open the server detail page.
 3. Under **Guest publication**, verify the external game port.
 4. Select **Publish for friends**.
-5. Copy the guest page address and send it to a friend.
+5. Copy the guest page address and send it to a friend. On a running CS2 server the friend can select **Open CS2 & join**, which uses Valve's `steam://connect/<host>:<port>` desktop link. **Copy address** remains available when a browser blocks external application links.
 
-The guest page contains no server IDs, internal IPs, paths, RCON data, password values, process IDs, logs, players or administrator actions. It only indicates whether the server is password protected.
+The guest page contains no server IDs, internal IPs, paths, RCON data, password values, process IDs, logs or administrator actions. It deliberately shows public presence data (player display names, active map and join address) plus map history and SharpTimer rankings without Steam IDs. It only indicates whether the server is password protected.
 
 ## 7. Test from outside
 
