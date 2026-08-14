@@ -42,7 +42,10 @@ public sealed record Cs2LiveControlState(
     bool HudLiveReadSucceeded,
     string ActivePracticeMode,
     bool PracticeLiveReadSucceeded,
-    bool SharpTimerInstalled);
+    bool SharpTimerInstalled,
+    string ActiveCombatMode,
+    bool CombatLiveReadSucceeded,
+    bool CombatOverrideActive);
 
 public sealed record Cs2MapChangeState(
     string Status,

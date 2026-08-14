@@ -388,7 +388,7 @@ input:focus, select:focus { border-color: #4b8d72; box-shadow: 0 0 0 3px #4de3a1
 .live-mode-state { display: grid; justify-items: end; gap: 5px; }
 .live-mode-state small { color: #718397; font-size: .48rem; font-weight: 900; letter-spacing: .07em; }
 .live-mode-state small[data-source="live"] { color: var(--green); }
-.combat-mode-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.combat-mode-selector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
 .combat-mode-selector button { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 92px; padding: 14px; border: 1px solid #2d3948; border-radius: 11px; color: #dce4ef; background: #0d141c; text-align: left; cursor: pointer; transition: .15s ease; }
 .combat-mode-selector button:hover:not(:disabled) { border-color: #4b8d70; background: #122019; transform: translateY(-1px); }
 .combat-mode-selector button.selected { border-color: var(--green); background: linear-gradient(145deg, #173628, #10241b); box-shadow: inset 0 0 0 1px #4de3a122; }

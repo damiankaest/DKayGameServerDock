@@ -370,8 +370,10 @@ public static partial class Cs2ModeCatalog
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             // SharpTimer implements damage and ammunition independently from CS2's own ConVars.
-            ["sharptimer_remove_damage"] = combatMode == "peaceful" ? "1" : "0",
-            ["sharptimer_apply_infinite_ammo"] = ammoMode == "infinite-magazine" ? "1" : "0"
+            // poor-sharptimer fake convars parse the literal strings true/false reliably. Numeric
+            // 1 does not enable a value that is currently false in the upstream command handler.
+            ["sharptimer_remove_damage"] = combatMode == "peaceful" ? "true" : "false",
+            ["sharptimer_apply_infinite_ammo"] = ammoMode == "infinite-magazine" ? "true" : "false"
         };
 
     public static IReadOnlyDictionary<string, string> BuildSharpTimerHudCommands(string hudMode)

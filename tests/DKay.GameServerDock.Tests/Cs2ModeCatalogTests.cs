@@ -132,9 +132,9 @@ public sealed class Cs2ModeCatalogTests
     }
 
     [Theory]
-    [InlineData("standard", "0", "0")]
-    [InlineData("infinite-reserve", "2", "0")]
-    [InlineData("infinite-magazine", "1", "1")]
+    [InlineData("standard", "0", "false")]
+    [InlineData("infinite-reserve", "2", "false")]
+    [InlineData("infinite-magazine", "1", "true")]
     public void Ammo_policy_controls_cs2_and_sharptimer_independently(
         string ammoMode,
         string infiniteAmmo,
@@ -157,7 +157,7 @@ public sealed class Cs2ModeCatalogTests
 
         Assert.Equal(infiniteAmmo, result["sv_infinite_ammo"]);
         Assert.Equal(sharpTimerInfiniteAmmo, sharpTimer["sharptimer_apply_infinite_ammo"]);
-        Assert.Equal("0", sharpTimer["sharptimer_remove_damage"]);
+        Assert.Equal("false", sharpTimer["sharptimer_remove_damage"]);
     }
 
     [Theory]
@@ -242,8 +242,8 @@ public sealed class Cs2ModeCatalogTests
             var combatConfig = await File.ReadAllTextAsync(Path.Combine(root, "game", "csgo", "cfg", "dkay-combat.cfg"));
             Assert.Contains("mp_damage_scale_t_body 1", combatConfig);
             Assert.Contains("sv_infinite_ammo 0", combatConfig);
-            Assert.Contains("sharptimer_remove_damage 0", combatConfig);
-            Assert.Contains("sharptimer_apply_infinite_ammo 0", combatConfig);
+            Assert.Contains("sharptimer_remove_damage false", combatConfig);
+            Assert.Contains("sharptimer_apply_infinite_ammo false", combatConfig);
             Assert.Contains("sharptimer_enable_velocity_hud 1", combatConfig);
 
             var customExec = await File.ReadAllTextAsync(customExecPath);

@@ -61,13 +61,17 @@ The **Live control** page deliberately owns a separate layer:
 ```text
 .dkay/gslt-token
 .dkay/steam-web-api-key
+.dkay/combat-mode
 .dkay/live-settings.json
 game/csgo/cfg/dkay-bootstrap.cfg
 game/csgo/cfg/dkay-gslt.cfg
+game/csgo/cfg/dkay-combat.cfg
 game/csgo/cfg/dkay-live.cfg
 ```
 
 Files below `.dkay` are canonical private state. Before an update, existing manually created GSLT and `webapi_authkey.txt` files are migrated there. On every later start the Dock regenerates the game-facing secret files, loads RCON and GSLT before the first map, applies the selected map preset and finally applies the administrator's live overrides. The Steam Web API key is never returned to the browser after it is saved. This order lets a preset provide its baseline without overwriting explicit live values such as warmup duration, gravity, maximum velocity or private-server cheats.
+
+Enemy and team damage are a global administrator policy. The four **Live control** switches apply the required CS2 damage multipliers and team rules immediately, disable stale respawn protection, and force SharpTimer's independent damage hook to the same state. The selected state is stored in `.dkay/combat-mode`; presets, Workshop maps, SharpTimer map configs, server restarts and scheduled map changes reapply it instead of replacing it. **Force current damage policy** is available when a newly loaded third-party plugin changes combat after its own startup.
 
 ## Workshop and join diagnostics
 

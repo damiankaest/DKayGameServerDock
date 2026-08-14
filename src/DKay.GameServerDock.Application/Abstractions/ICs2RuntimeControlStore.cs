@@ -10,6 +10,8 @@ public interface ICs2RuntimeControlStore
     IReadOnlyDictionary<string, string> SaveLiveSettings(
         GameServerInstance server,
         IReadOnlyDictionary<string, string> values);
+    string? ReadCombatModeOverride(GameServerInstance server);
+    void SaveCombatModeOverride(GameServerInstance server, string combatMode);
     Cs2GsltState GetGsltState(GameServerInstance server);
     Cs2GsltState SaveGsltToken(GameServerInstance server, string token);
 }

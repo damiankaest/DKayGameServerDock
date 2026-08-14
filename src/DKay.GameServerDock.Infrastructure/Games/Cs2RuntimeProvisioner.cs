@@ -17,6 +17,18 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         "vstdlib_s64.dll"
     ];
 
+    private static readonly HashSet<string> CombatOverrideKeys =
+    [
+        "mp_friendlyfire",
+        "mp_teammates_are_enemies",
+        "mp_damage_scale_ct_head",
+        "mp_damage_scale_ct_body",
+        "mp_damage_scale_t_head",
+        "mp_damage_scale_t_body",
+        "mp_damage_headshot_only",
+        "mp_respawn_immunitytime"
+    ];
+
     private static readonly JsonSerializerOptions SecretJsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -150,6 +162,33 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         return normalized;
     }
 
+    public string? ReadCombatModeOverride(GameServerInstance server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        var path = GetCombatModeOverridePath(server);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var value = File.ReadAllText(path).Trim().ToLowerInvariant();
+        return value is "peaceful" or "team" or "ffa" ? value : null;
+    }
+
+    public void SaveCombatModeOverride(GameServerInstance server, string combatMode)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        combatMode = combatMode?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (combatMode is not ("peaceful" or "team" or "ffa"))
+        {
+            throw new InvalidOperationException("Combat mode must be peaceful, team or ffa.");
+        }
+
+        var path = GetCombatModeOverridePath(server);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        WriteAtomic(path, combatMode + Environment.NewLine);
+    }
+
     public void AlignPersistedLiveSettingsWithPreset(
         GameServerInstance server,
         IReadOnlyDictionary<string, string> presetSettings)
@@ -164,8 +203,14 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
 
         var definitions = LiveSettingDefinitions.ToDictionary(setting => setting.Key, StringComparer.Ordinal);
         var persisted = new Dictionary<string, string>(ReadPersistedLiveSettings(server), StringComparer.Ordinal);
+        var preserveCombatOverride = ReadCombatModeOverride(server) is not null;
         foreach (var (key, value) in presetSettings)
         {
+            if (preserveCombatOverride && CombatOverrideKeys.Contains(key))
+            {
+                continue;
+            }
+
             if (definitions.TryGetValue(key, out var definition))
             {
                 persisted[key] = NormalizeLiveSetting(definition, value);
@@ -277,6 +322,7 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
             $"echo \"DKAY_WORKSHOP_REQUEST {publishedFileId}\"{Environment.NewLine}" +
             $"host_workshop_map {publishedFileId}{Environment.NewLine}" +
             "exec dkay-server.cfg" + Environment.NewLine +
+            "exec dkay-combat.cfg" + Environment.NewLine +
             "exec dkay-live.cfg" + Environment.NewLine);
     }
 
@@ -614,6 +660,9 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
 
     private static string GetLiveSettingsPath(GameServerInstance server) =>
         Path.Combine(server.InstallDirectory, ".dkay", "live-settings.json");
+
+    private static string GetCombatModeOverridePath(GameServerInstance server) =>
+        Path.Combine(server.InstallDirectory, ".dkay", "combat-mode");
 
     private static string GetWorkshopApiKeySecretPath(GameServerInstance server) =>
         Path.Combine(server.InstallDirectory, ".dkay", "steam-web-api-key");

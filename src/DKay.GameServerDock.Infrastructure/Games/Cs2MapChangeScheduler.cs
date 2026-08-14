@@ -208,7 +208,7 @@ public sealed class Cs2MapChangeScheduler(
 
                 await rcon.ExecuteAsync(
                     change.Server,
-                    $"exec dkay/maps/{cfgProfileId}.cfg; exec dkay-live.cfg",
+                    $"exec dkay/maps/{cfgProfileId}.cfg; exec dkay-combat.cfg; exec dkay-live.cfg",
                     cancellationToken,
                     TimeSpan.FromSeconds(2));
                 return true;

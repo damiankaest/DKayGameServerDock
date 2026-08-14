@@ -24,10 +24,11 @@ public sealed partial class Cs2LiveControlService(
         new("resume-match", "Resume match", "Continue a previously paused match.", "Round", "▷"),
         new("swap-teams", "Swap teams", "Move Terrorists and Counter-Terrorists to the opposite side.", "Teams", "⇄"),
         new("scramble-teams", "Scramble teams", "Redistribute the current players across both teams.", "Teams", "⤨"),
-        new("combat-peaceful", "Peaceful", "Weapons stay available, but nobody can deal player damage.", "Teams", "☮"),
-        new("combat-team", "CT vs T", "Opponents take normal damage while teammates remain protected.", "Teams", "VS"),
-        new("combat-ffa", "Free for all", "Every other player is an enemy, independent of the assigned team.", "Teams", "FFA"),
-        new("repair-team-damage", "Reapply combat profile", "Restore the selected peaceful, team or FFA policy after a plugin or map changed it.", "Teams", "HP", "primary"),
+        new("combat-enemy-on", "Enemy damage on", "Opponents take normal damage immediately.", "Teams", "ON", "primary"),
+        new("combat-enemy-off", "Enemy damage off", "Block all player damage immediately. Team damage is disabled with it.", "Teams", "OFF"),
+        new("combat-team-on", "Team damage on", "Allow damage between all players, including players CS2 placed on the same team.", "Teams", "ON", "danger"),
+        new("combat-team-off", "Team damage off", "Protect teammates while keeping enemy damage enabled.", "Teams", "OFF"),
+        new("repair-team-damage", "Force current damage policy", "Reapply the global damage policy after a plugin or map changed it.", "Teams", "HP", "primary"),
         new("add-bot-ct", "Add CT bot", "Disable team limits and add exactly one CT bot.", "Bots", "+CT"),
         new("add-bot-t", "Add T bot", "Disable team limits and add exactly one T bot.", "Bots", "+T"),
         new("kill-bots", "Kill bots", "Enable private-server cheats and end every bot life.", "Bots", "⌁", "danger"),
@@ -68,6 +69,18 @@ public sealed partial class Cs2LiveControlService(
             ["rtv"] = "css_rtv"
         };
 
+    private static readonly string[] CombatLiveKeys =
+    [
+        "mp_friendlyfire",
+        "mp_teammates_are_enemies",
+        "mp_damage_scale_ct_head",
+        "mp_damage_scale_ct_body",
+        "mp_damage_scale_t_head",
+        "mp_damage_scale_t_body",
+        "mp_damage_headshot_only",
+        "mp_respawn_immunitytime"
+    ];
+
     public async Task<Cs2LiveControlState> GetStateAsync(Guid serverId, CancellationToken cancellationToken)
     {
         var server = await GetCs2ServerAsync(serverId, cancellationToken);
@@ -85,6 +98,9 @@ public sealed partial class Cs2LiveControlService(
         var modeState = await modes.GetStateAsync(server, cancellationToken);
         var activeProfile = modeState.Profiles.FirstOrDefault(profile =>
             string.Equals(profile.Id, modeState.ActiveProfileId, StringComparison.Ordinal));
+        var combatOverride = store.ReadCombatModeOverride(server);
+        var activeCombatMode = combatOverride ?? activeProfile?.CombatMode ?? "team";
+        var combatLiveReadSucceeded = false;
         var activeHudMode = activeProfile?.HudMode ?? "hidden";
         var activePracticeMode = activeProfile?.PracticeMode ?? "disabled";
         var hudLiveReadSucceeded = false;
@@ -127,6 +143,12 @@ public sealed partial class Cs2LiveControlService(
                 {
                     failedReads++;
                 }
+            }
+
+            combatLiveReadSucceeded = CombatLiveKeys.All(liveValueKeys.Contains);
+            if (combatLiveReadSucceeded)
+            {
+                activeCombatMode = ResolveCombatModeFromValues(values);
             }
 
             if (readFailureDetail is not null)
@@ -182,7 +204,10 @@ public sealed partial class Cs2LiveControlService(
             hudLiveReadSucceeded,
             activePracticeMode,
             practiceLiveReadSucceeded,
-            sharpTimerInstalled);
+            sharpTimerInstalled,
+            activeCombatMode,
+            combatLiveReadSucceeded,
+            combatOverride is not null);
     }
 
     public async Task<Cs2LiveConfigurationApplyResult> ApplyAsync(
@@ -244,16 +269,21 @@ public sealed partial class Cs2LiveControlService(
             throw new InvalidOperationException("Start the CS2 server before using live controls.");
         }
 
-        var combatMode = ResolveCombatModeAction(request.ActionId);
+        var currentCombatMode = store.ReadCombatModeOverride(server);
+        if (currentCombatMode is null)
+        {
+            var currentModeState = await modes.GetStateAsync(server, cancellationToken);
+            currentCombatMode = currentModeState.Profiles.FirstOrDefault(profile =>
+                string.Equals(profile.Id, currentModeState.ActiveProfileId, StringComparison.Ordinal))?.CombatMode
+                ?? "team";
+        }
+        var combatMode = ResolveCombatModeAction(request.ActionId, currentCombatMode);
         var respawnMode = ResolveRespawnModeAction(request.ActionId);
         var hudMode = ResolveHudModeAction(request.ActionId);
         var practiceMode = ResolvePracticeModeAction(request.ActionId);
         if (request.ActionId == "repair-team-damage")
         {
-            var savedState = await modes.GetStateAsync(server, cancellationToken);
-            combatMode = savedState.Profiles.FirstOrDefault(profile =>
-                string.Equals(profile.Id, savedState.ActiveProfileId, StringComparison.Ordinal))?.CombatMode
-                ?? throw new InvalidOperationException("Select and activate a map profile before reapplying its combat mode.");
+            combatMode = currentCombatMode;
         }
         var sharpTimerInstalled = false;
         if (combatMode is not null || hudMode is not null || practiceMode is not null)
@@ -270,6 +300,9 @@ public sealed partial class Cs2LiveControlService(
 
         if (combatMode is not null)
         {
+            // Persist this first so every configuration writer sees the global administrator
+            // decision instead of the active preset's default while this action is running.
+            store.SaveCombatModeOverride(server, combatMode);
             await modes.SetActiveCombatModeAsync(server, combatMode, cancellationToken);
             var persistentValues = store.ReadLiveSettings(server).ToDictionary(
                 pair => pair.Key,
@@ -363,7 +396,7 @@ public sealed partial class Cs2LiveControlService(
                 cancellationToken);
             var failures = FindCombatVerificationFailures(
                 BuildCombatLiveValues(combatMode),
-                sharpTimerInstalled ? (combatMode == "peaceful" ? "1" : "0") : null,
+                null,
                 verification.Output);
             if (failures.Count > 0)
             {
@@ -374,7 +407,9 @@ public sealed partial class Cs2LiveControlService(
 
             result = result with
             {
-                Output = $"Live combat mode '{combatMode}' applied and verified without restarting the round."
+                Output = $"Global damage policy '{combatMode}' applied immediately. CS2 engine values were verified" +
+                    (sharpTimerInstalled ? " and SharpTimer's damage hook was forced to the matching state" : string.Empty) +
+                    ". It remains authoritative after preset and map changes."
             };
         }
         else
@@ -425,11 +460,15 @@ public sealed partial class Cs2LiveControlService(
             ? "bot_kick; exec dkay-live.cfg"
             : "exec dkay-live.cfg";
 
-    internal static string? ResolveCombatModeAction(string actionId) => actionId switch
+    internal static string? ResolveCombatModeAction(string actionId, string currentCombatMode = "team") => actionId switch
     {
         "combat-peaceful" => "peaceful",
         "combat-team" => "team",
         "combat-ffa" => "ffa",
+        "combat-enemy-on" => currentCombatMode == "ffa" ? "ffa" : "team",
+        "combat-enemy-off" => "peaceful",
+        "combat-team-on" => "ffa",
+        "combat-team-off" => currentCombatMode == "peaceful" ? "peaceful" : "team",
         _ => null
     };
 
@@ -620,7 +659,10 @@ public sealed partial class Cs2LiveControlService(
             ["mp_damage_scale_ct_body"] = damageScale,
             ["mp_damage_scale_t_head"] = damageScale,
             ["mp_damage_scale_t_body"] = damageScale,
-            ["mp_damage_headshot_only"] = "0"
+            ["mp_damage_headshot_only"] = "0",
+            // A map or mode may leave a respawned player protected indefinitely. Enabling a
+            // combat policy must make hits effective immediately, not only after a hidden timer.
+            ["mp_respawn_immunitytime"] = "0"
         };
     }
 
@@ -631,7 +673,9 @@ public sealed partial class Cs2LiveControlService(
             .ToList();
         if (sharpTimerInstalled)
         {
-            commands.Add($"sharptimer_remove_damage {(combatMode == "peaceful" ? "1" : "0")}");
+            // poor-sharptimer's fake convar reliably mutates its damage hook only with literal
+            // booleans. Using 1 can leave the previous value unchanged.
+            commands.Add($"sharptimer_remove_damage {(combatMode == "peaceful" ? "true" : "false")}");
         }
 
         return string.Join("; ", commands);
@@ -639,13 +683,31 @@ public sealed partial class Cs2LiveControlService(
 
     internal static string BuildCombatVerificationCommand(bool sharpTimerInstalled)
     {
+        _ = sharpTimerInstalled;
+        // SharpTimer fake convars are commands and do not print their current state when queried.
+        // Treating the echoed command as a value produced false green status. Engine ConVars are
+        // queried here; the SharpTimer hook is authoritatively set on every apply/start/map change.
         var keys = BuildCombatLiveValues("team").Keys.ToList();
-        if (sharpTimerInstalled)
+        return string.Join("; ", keys);
+    }
+
+    internal static string ResolveCombatModeFromValues(IReadOnlyDictionary<string, string> values)
+    {
+        var damageDisabled = new[]
         {
-            keys.Add("sharptimer_remove_damage");
+            "mp_damage_scale_ct_head",
+            "mp_damage_scale_ct_body",
+            "mp_damage_scale_t_head",
+            "mp_damage_scale_t_body"
+        }.All(key => values.TryGetValue(key, out var value) && ConsoleValuesMatch("0", value));
+        if (damageDisabled)
+        {
+            return "peaceful";
         }
 
-        return string.Join("; ", keys);
+        var teamDamageEnabled = new[] { "mp_friendlyfire", "mp_teammates_are_enemies" }
+            .Any(key => values.TryGetValue(key, out var value) && ConsoleValuesMatch("1", value));
+        return teamDamageEnabled ? "ffa" : "team";
     }
 
     internal static IReadOnlyList<string> FindCombatVerificationFailures(
@@ -768,7 +830,10 @@ public sealed partial class Cs2LiveControlService(
         bool hudLiveReadSucceeded,
         string activePracticeMode,
         bool practiceLiveReadSucceeded,
-        bool sharpTimerInstalled) => new(
+        bool sharpTimerInstalled,
+        string activeCombatMode,
+        bool combatLiveReadSucceeded,
+        bool combatOverrideActive) => new(
             running,
             liveReadSucceeded,
             liveReadMessage,
@@ -783,7 +848,10 @@ public sealed partial class Cs2LiveControlService(
             hudLiveReadSucceeded,
             activePracticeMode,
             practiceLiveReadSucceeded,
-            sharpTimerInstalled);
+            sharpTimerInstalled,
+            activeCombatMode,
+            combatLiveReadSucceeded,
+            combatOverrideActive);
 
     internal static IReadOnlyList<string> BuildLiveReadCommands(
         IReadOnlyList<Cs2LiveSettingDescriptor> settings,

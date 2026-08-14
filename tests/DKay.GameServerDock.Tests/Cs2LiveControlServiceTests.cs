@@ -89,6 +89,8 @@ public sealed class Cs2LiveControlServiceTests
     [InlineData("combat-peaceful", "peaceful", "0", "0", "0")]
     [InlineData("combat-team", "team", "0", "0", "1")]
     [InlineData("combat-ffa", "ffa", "1", "1", "1")]
+    [InlineData("combat-enemy-off", "peaceful", "0", "0", "0")]
+    [InlineData("combat-team-on", "ffa", "1", "1", "1")]
     public void Combat_actions_map_to_persisted_live_damage_rules(
         string actionId,
         string expectedMode,
@@ -105,7 +107,19 @@ public sealed class Cs2LiveControlServiceTests
         Assert.Equal(damageScale, values["mp_damage_scale_ct_body"]);
         Assert.Equal(damageScale, values["mp_damage_scale_t_head"]);
         Assert.Equal("0", values["mp_damage_headshot_only"]);
+        Assert.Equal("0", values["mp_respawn_immunitytime"]);
     }
+
+    [Theory]
+    [InlineData("combat-enemy-on", "peaceful", "team")]
+    [InlineData("combat-enemy-on", "ffa", "ffa")]
+    [InlineData("combat-team-off", "ffa", "team")]
+    [InlineData("combat-team-off", "peaceful", "peaceful")]
+    public void Independent_damage_switches_preserve_the_other_active_policy(
+        string actionId,
+        string currentMode,
+        string expectedMode) =>
+        Assert.Equal(expectedMode, Cs2LiveControlService.ResolveCombatModeAction(actionId, currentMode));
 
     [Fact]
     public void Live_combat_command_sets_engine_and_sharptimer_values_directly_without_restarting()
@@ -115,7 +129,8 @@ public sealed class Cs2LiveControlServiceTests
         Assert.Contains("mp_friendlyfire 0", command);
         Assert.Contains("mp_teammates_are_enemies 0", command);
         Assert.Contains("mp_damage_scale_t_body 1", command);
-        Assert.Contains("sharptimer_remove_damage 0", command);
+        Assert.Contains("mp_respawn_immunitytime 0", command);
+        Assert.Contains("sharptimer_remove_damage false", command);
         Assert.DoesNotContain("exec ", command);
         Assert.DoesNotContain("mp_restartgame", command);
     }
@@ -131,6 +146,7 @@ public sealed class Cs2LiveControlServiceTests
             "mp_damage_scale_t_head" = "1.0"
             "mp_damage_scale_t_body" = "1"
             "mp_damage_headshot_only" = "false"
+            "mp_respawn_immunitytime" = "0"
             "sharptimer_remove_damage" = "false"
             """;
 
@@ -153,6 +169,7 @@ public sealed class Cs2LiveControlServiceTests
             "mp_damage_scale_t_head" = "1"
             "mp_damage_scale_t_body" = "1"
             "mp_damage_headshot_only" = "0"
+            "mp_respawn_immunitytime" = "0"
             "sharptimer_remove_damage" = "true"
             """;
 
