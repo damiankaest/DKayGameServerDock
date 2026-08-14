@@ -58,7 +58,7 @@
       <div class="mode-workbench">
         <section class="panel full mode-intro">
           <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Ready to configure' : 'Stop required' }}</span></header>
-          <p>Each map receives its own generated config. Only the settings shown here are accepted; raw commands and arbitrary download URLs never reach the server process.</p>
+          <p>Presets define how a map starts after activation or a map change. They are the reusable blueprint—not a claim about what CS2 is running right now. Open <button type="button" class="inline-link-button" (click)="selectTab('control')">Live control</button> to inspect and change the current server without editing the map blueprint.</p>
         </section>
 
         @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed' && !isProfileLive(activeModeProfile())) {
@@ -174,6 +174,16 @@
                   </select>
                   <small>Controls SharpTimer's center display per map. Combat and RPG presets default to a clean screen; Surf, KZ and Bhop keep movement details.</small>
                 </label>
+                <label class="mode-policy-field">After a player dies
+                  <select [value]="modeRespawn()" (change)="updateModeRespawn($event)">
+                    <option value="round">Wait for next round</option>
+                    <option value="instant">Always respawn immediately</option>
+                  </select>
+                  <small>
+                    @if (modeRespawn() === 'round') { Death matters: eliminated players wait until the round has been decided. }
+                    @else { Arena flow: players return immediately and normal round win conditions stay disabled. }
+                  </small>
+                </label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {
@@ -241,21 +251,33 @@
         @if (liveLoading() && !liveControl()) {
           <div class="skeleton-block tall full"></div>
         } @else if (liveControl(); as control) {
+          <section class="panel full live-now-panel">
+            <header><div><p class="eyebrow">CURRENT SERVER</p><h2>What is active right now</h2><p>Every green value was read from the running CS2 process. Select a card to change its detailed settings.</p></div><div class="live-now-drift" [class.clean]="livePresetDriftCount() === 0"><strong>{{ livePresetDriftCount() }}</strong><span>different from<br />map preset</span></div></header>
+            <div class="live-now-grid">
+              <article><span>MAP</span><small>Currently loaded</small><strong>{{ liveSummaryValue('map') }}</strong><em>{{ liveSummaryValue('profile') }} blueprint</em></article>
+              <button type="button" (click)="openLiveGroup('Teams & players')"><span>VS</span><small>Player damage</small><strong>{{ liveSummaryValue('combat') }}</strong><em>{{ livePolicyObserved('combat') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>∞</span><small>Death flow</small><strong>{{ liveSummaryValue('respawn') }}</strong><em>{{ livePolicyObserved('respawn') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Movement & physics')"><span>↗</span><small>Movement</small><strong>{{ liveSummaryValue('movement') }}</strong><em>{{ livePolicyObserved('bhop') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Bots')"><span>BOT</span><small>Quota · difficulty</small><strong>{{ liveSummaryValue('bots') }}</strong><em>{{ isLiveSettingObserved('bot_quota') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>HUD</span><small>Player display</small><strong>{{ liveSummaryValue('hud') }}</strong><em>{{ livePolicyObserved('hud') ? 'Live from SharpTimer' : 'Saved fallback' }}</em></button>
+            </div>
+          </section>
+
           <section class="panel full live-combat-panel">
             <header>
               <div><p class="eyebrow">LIVE COMBAT</p><h2>Who can damage whom?</h2><p>Switch the active rule immediately. The Hub verifies CS2 and SharpTimer before showing success.</p></div>
-              <span class="live-mode-badge">{{ activeCombatMode() === 'peaceful' ? 'PEACEFUL' : activeCombatMode() === 'ffa' ? 'FREE FOR ALL' : 'CT VS T' }}</span>
+              <div class="live-mode-state"><span class="live-mode-badge">{{ activeCombatMode() === 'peaceful' ? 'PEACEFUL' : activeCombatMode() === 'ffa' ? 'FREE FOR ALL' : 'CT VS T' }}</span><small [attr.data-source]="livePolicyObserved('combat') ? 'live' : 'saved'">{{ livePolicyObserved('combat') ? '● LIVE FROM CS2' : '○ SAVED FALLBACK' }}</small></div>
             </header>
             <div class="combat-mode-selector" role="group" aria-label="Live combat mode">
               @for (action of combatActions(); track action.id) {
                 <button type="button"
-                  [class.selected]="activeCombatMode() === combatModeForAction(action.id)"
+                  [class.selected]="(!control.running || livePolicyObserved('combat')) && activeCombatMode() === combatModeForAction(action.id)"
                   [class.loading]="liveAction() === action.id"
                   [disabled]="!control.running || liveAction() !== ''"
                   (click)="runLiveAction(action)">
                   <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
                   <div><strong>{{ action.label }}</strong><small>{{ action.description }}</small></div>
-                  @if (activeCombatMode() === combatModeForAction(action.id)) { <b>ACTIVE</b> }
+                  @if ((!control.running || livePolicyObserved('combat')) && activeCombatMode() === combatModeForAction(action.id)) { <b>ACTIVE</b> }
                 </button>
               }
             </div>
@@ -265,6 +287,46 @@
                 <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Reapplying…' : '↻ Reapply current mode' }}</button>
               }
             </footer>
+          </section>
+
+          <section class="panel full live-policy-panel">
+            <header>
+              <div><p class="eyebrow">LIVE GAMEPLAY</p><h2>Movement, respawn and screen</h2><p>These switches show the values currently reported by CS2 and SharpTimer—not just the selected preset.</p></div>
+              <button class="ghost-button small" type="button" [disabled]="liveLoading() || liveAction() !== ''" (click)="loadCs2Control()">↻ Read actual state</button>
+            </header>
+            <div class="live-policy-grid">
+              <article [class.saved-state]="!livePolicyObserved('bhop')">
+                <div class="live-policy-heading"><span>↗</span><div><strong>Automatic bunnyhop</strong><small>Hold jump to hop continuously.</small></div><b [class.warning]="activeBhopMode() === 'mixed' || !livePolicyObserved('bhop')">{{ activeBhopMode() === 'enabled' ? 'ON' : activeBhopMode() === 'disabled' ? 'OFF' : 'MIXED' }} · {{ livePolicyObserved('bhop') ? 'LIVE' : 'SAVED' }}</b></div>
+                <div class="live-policy-options" role="group" aria-label="Automatic bunnyhop">
+                  @for (action of policyActions('bhop'); track action.id) {
+                    <button type="button" [class.selected]="(livePolicyObserved('bhop') || !control.running) && isPolicyActionActive(action.id)" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                      <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                    </button>
+                  }
+                </div>
+              </article>
+              <article [class.saved-state]="!livePolicyObserved('respawn')">
+                <div class="live-policy-heading"><span>∞</span><div><strong>Death & round flow</strong><small>Choose whether elimination matters.</small></div><b [class.warning]="activeRespawnMode() === 'mixed' || !livePolicyObserved('respawn')">{{ activeRespawnMode() === 'instant' ? 'INSTANT' : activeRespawnMode() === 'round' ? 'ROUND' : 'MIXED' }} · {{ livePolicyObserved('respawn') ? 'LIVE' : 'SAVED' }}</b></div>
+                <div class="live-policy-options" role="group" aria-label="Respawn behavior">
+                  @for (action of policyActions('respawn'); track action.id) {
+                    <button type="button" [class.selected]="(livePolicyObserved('respawn') || !control.running) && isPolicyActionActive(action.id)" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
+                      <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                    </button>
+                  }
+                </div>
+              </article>
+              <article [class.saved-state]="!livePolicyObserved('hud')">
+                <div class="live-policy-heading"><span>HUD</span><div><strong>SharpTimer display</strong><small>Hide keys and speed outside movement modes.</small></div><b [class.warning]="!livePolicyObserved('hud')">{{ activeHudMode() === 'hidden' ? 'CLEAN' : activeHudMode() === 'timer' ? 'TIMER' : 'MOVEMENT' }} · {{ livePolicyObserved('hud') ? 'LIVE' : 'SAVED' }}</b></div>
+                <div class="live-policy-options three" role="group" aria-label="SharpTimer HUD">
+                  @for (action of policyActions('hud'); track action.id) {
+                    <button type="button" [class.selected]="(livePolicyObserved('hud') || !control.running) && isPolicyActionActive(action.id)" [disabled]="!control.running || !control.sharpTimerInstalled || liveAction() !== ''" (click)="runLiveAction(action)">
+                      <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                    </button>
+                  }
+                </div>
+                @if (!control.sharpTimerInstalled) { <small class="live-policy-note">Install SharpTimer under Modes & maps to enable this display.</small> }
+              </article>
+            </div>
           </section>
 
           <section class="panel full live-actions-panel">
@@ -327,15 +389,23 @@
           <section class="panel full live-config-panel">
             <header>
               <div><p class="eyebrow">LIVE CONFIGURATION</p><h2>Runtime settings</h2><p>{{ control.liveReadMessage }}</p></div>
-              <button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply to live server' : 'Save for next start' }}</button>
+              <button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== '' || liveDirtyKeys().length === 0" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : liveDirtyKeys().length ? (control.running ? 'Apply to live server' : 'Save for next start') : 'No pending changes' }}</button>
             </header>
+            <div class="live-snapshot-banner" [attr.data-source]="control.running && control.liveReadSucceeded ? 'live' : control.running ? 'fallback' : 'saved'">
+              <span><i></i><span><strong>{{ control.running && control.liveReadSucceeded ? 'Live server snapshot' : control.running ? 'Saved values with live fallbacks' : 'Saved startup configuration' }}</strong><small>{{ control.observedAt | date:'HH:mm:ss' }} · refreshes automatically while this page is open</small></span></span>
+              <b>{{ control.liveValueKeys.length }}/{{ control.settings.length }} LIVE</b>
+            </div>
             <div class="live-editor-toolbar">
-              <div class="live-editor-summary"><strong>{{ livePresetName() }} controls</strong><small>{{ liveEditorView() === 'recommended' ? 'Focused controls for the active preset. Unrelated tuning stays hidden.' : 'Every supported value, including expert tuning.' }}</small></div>
+              <div class="live-editor-summary"><strong>{{ livePresetName() }} · current runtime</strong><small>{{ liveEditorView() === 'map' ? 'Settings relevant to the active map blueprint plus its live policies.' : liveEditorView() === 'changed' ? 'Only values that differ from the map preset or are not applied yet.' : 'Every setting the Hub can read and change on the current server.' }}</small></div>
               <div class="live-editor-switch" role="group" aria-label="Live configuration detail level">
-                <button type="button" [class.active]="liveEditorView() === 'recommended'" (click)="setLiveEditorView('recommended')">Recommended</button>
+                <button type="button" [class.active]="liveEditorView() === 'map'" (click)="setLiveEditorView('map')">Current map</button>
+                <button type="button" [class.active]="liveEditorView() === 'changed'" (click)="setLiveEditorView('changed')">Differences {{ livePresetDriftCount() + liveDirtyKeys().length }}</button>
                 <button type="button" [class.active]="liveEditorView() === 'all'" (click)="setLiveEditorView('all')">All / advanced</button>
               </div>
             </div>
+            @if (livePresetDriftCount() > 0) {
+              <div class="live-preset-drift"><span><strong>{{ livePresetDriftCount() }} live value{{ livePresetDriftCount() === 1 ? '' : 's' }} differ from {{ livePresetName() }}</strong><small>This is allowed: live changes override the blueprint until a preset/map reload applies it again.</small></span><button type="button" class="secondary-button small" (click)="resetAllLiveValuesToPreset()">Prepare preset values</button></div>
+            }
             <div class="live-editor-search">
               <span>⌕</span>
               <input type="search" aria-label="Search server settings" placeholder="Search settings, for example bots, warmup, gravity or mp_roundtime…" [value]="liveQuery()" (input)="updateLiveQuery($event)" />
@@ -357,17 +427,25 @@
                   <header><span>{{ liveGroupIcon(group) }}</span><div><h3>{{ group }}</h3><p>{{ liveGroupDescription(group) }}</p></div></header>
                   <div class="live-setting-grid">
                     @for (setting of liveSettingsFor(group); track setting.key) {
-                      <label [class.cheat-setting]="setting.key === 'sv_cheats'">
-                        <span><strong>{{ setting.label }}</strong>@if (liveEditorView() === 'all') { <code>{{ setting.key }}</code> }</span>
+                      <article class="live-setting-card" [class.cheat-setting]="setting.key === 'sv_cheats'" [class.dirty]="isLiveSettingDirty(setting.key)" [class.preset-drift]="liveSettingDiffersFromPreset(setting.key)" [attr.data-source]="liveSettingSource(setting.key)">
+                        <header><span><strong>{{ setting.label }}</strong>@if (liveEditorView() === 'all') { <code>{{ setting.key }}</code> }</span><b>{{ liveSettingSourceLabel(setting.key) }}</b></header>
+                        <div class="live-setting-readout"><span>{{ isLiveSettingObserved(setting.key) ? 'Server now' : control.running ? 'Saved fallback' : 'Saved value' }}</span><strong>{{ liveSettingValueLabel(setting, liveObservedValues()[setting.key]) }}</strong></div>
                         @if (setting.type === 'boolean') {
-                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)"><option value="1">Enabled</option><option value="0">Disabled</option></select>
+                          <div class="live-boolean-switch" role="group" [attr.aria-label]="setting.label">
+                            <button type="button" [class.active]="liveValues()[setting.key] === '1'" (click)="setLiveValue(setting.key, '1')">ON</button>
+                            <button type="button" [class.active]="liveValues()[setting.key] === '0'" (click)="setLiveValue(setting.key, '0')">OFF</button>
+                          </div>
                         } @else if (setting.type === 'select') {
-                          <select [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)">@for (option of setting.options || []; track option) { <option [value]="option">{{ liveOptionLabel(setting, option) }}</option> }</select>
+                          <select [attr.aria-label]="setting.label" [value]="liveValues()[setting.key]" (change)="updateLiveValue(setting.key, $event)">@for (option of setting.options || []; track option) { <option [value]="option">{{ liveOptionLabel(setting, option) }}</option> }</select>
                         } @else {
-                          <input type="number" [min]="setting.minimum" [max]="setting.maximum" [step]="setting.step || (setting.type === 'integer' ? 1 : 'any')" [value]="liveValues()[setting.key]" (input)="updateLiveValue(setting.key, $event)" />
+                          <input [attr.aria-label]="setting.label" type="number" [min]="setting.minimum" [max]="setting.maximum" [step]="setting.step || (setting.type === 'integer' ? 1 : 'any')" [value]="liveValues()[setting.key]" (input)="updateLiveValue(setting.key, $event)" />
+                        }
+                        @if (isLiveSettingDirty(setting.key)) { <p class="live-setting-pending">Pending: {{ liveSettingValueLabel(setting, liveValues()[setting.key]) }}</p> }
+                        @if (livePresetValue(setting.key); as presetValue) {
+                          <div class="live-preset-value"><span>Map preset: <b>{{ liveSettingValueLabel(setting, presetValue) }}</b></span>@if (liveValues()[setting.key] !== presetValue) { <button type="button" (click)="resetLiveValueToPreset(setting.key)">Use preset</button> }</div>
                         }
                         <small>{{ setting.description }}</small>
-                      </label>
+                      </article>
                     }
                   </div>
                 </section>
@@ -375,7 +453,7 @@
                 <div class="live-settings-empty"><span>⌕</span><strong>No settings found</strong><p>Try a broader term or switch to “All / advanced”.</p><button class="secondary-button small" type="button" (click)="clearLiveQuery()">Clear search</button></div>
               }
             </div>
-            <div class="live-config-footer"><span><i></i>Values are persisted outside generated preset files</span><button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== ''" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : control.running ? 'Apply changes' : 'Save changes' }}</button></div>
+            <div class="live-config-footer"><span><i></i>{{ liveDirtyKeys().length ? liveDirtyKeys().length + ' unapplied change(s)' : 'Everything shown matches the latest server read' }}</span><button class="primary-button" type="button" [disabled]="liveSaving() || liveAction() !== '' || liveDirtyKeys().length === 0" (click)="applyLiveConfiguration()">{{ liveSaving() ? 'Applying…' : liveDirtyKeys().length ? (control.running ? 'Apply changes' : 'Save changes') : 'Up to date' }}</button></div>
           </section>
         }
       </div>

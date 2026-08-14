@@ -210,11 +210,13 @@ export interface Cs2ModePreset {
   defaultCombatMode: Cs2CombatMode;
   defaultAmmoMode: Cs2AmmoMode;
   defaultHudMode: Cs2HudMode;
+  defaultRespawnMode: Cs2RespawnMode;
 }
 
 export type Cs2CombatMode = 'peaceful' | 'team' | 'ffa';
 export type Cs2AmmoMode = 'standard' | 'infinite-magazine' | 'infinite-reserve';
 export type Cs2HudMode = 'hidden' | 'timer' | 'movement';
+export type Cs2RespawnMode = 'round' | 'instant';
 
 export interface Cs2ManagedPackage {
   id: string;
@@ -247,6 +249,7 @@ export interface Cs2ModeProfile {
   combatMode: Cs2CombatMode;
   ammoMode: Cs2AmmoMode;
   hudMode: Cs2HudMode;
+  respawnMode: Cs2RespawnMode;
   overrides: Record<string, string>;
   recommendedPackageIds: string[];
   updatedAt: string;
@@ -306,6 +309,7 @@ export interface ApplyCs2ModePresetRequest {
   combatMode: Cs2CombatMode;
   ammoMode: Cs2AmmoMode;
   hudMode: Cs2HudMode;
+  respawnMode: Cs2RespawnMode;
 }
 
 export interface Cs2ModeApplyResult {
@@ -347,11 +351,16 @@ export interface Cs2LiveControlState {
   running: boolean;
   liveReadSucceeded: boolean;
   liveReadMessage: string;
+  observedAt: string;
+  liveValueKeys: string[];
   settings: Cs2LiveSetting[];
   values: Record<string, string>;
   actions: Cs2QuickAction[];
   gslt: Cs2GsltState;
   mapChange: Cs2MapChangeState;
+  activeHudMode: Cs2HudMode;
+  hudLiveReadSucceeded: boolean;
+  sharpTimerInstalled: boolean;
 }
 
 export interface Cs2MapChangeState {

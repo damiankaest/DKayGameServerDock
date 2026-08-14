@@ -31,21 +31,30 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         new("mp_timelimit", "Map time limit", "Round & match", "integer", "0", "Minutes before the map ends. Zero disables the limit.", 0, 1440, 1),
         new("mp_buytime", "Buy time", "Round & match", "integer", "20", "Seconds in which players may buy equipment.", 0, 9999, 1),
 
-        new("mp_autoteambalance", "Auto team balance", "Teams & bots", "boolean", "0", "Move players automatically to keep teams balanced.", Options: ["0", "1"]),
-        new("mp_limitteams", "Team difference limit", "Teams & bots", "integer", "0", "Maximum team-size difference. Zero allows intentionally stacked practice teams.", 0, 32, 1),
-        new("mp_friendlyfire", "Friendly fire", "Teams & bots", "boolean", "0", "Allow teammates to damage one another.", Options: ["0", "1"]),
-        new("mp_teammates_are_enemies", "Free-for-all targeting", "Teams & bots", "boolean", "0", "Treat every other player as an enemy, even when CS2 places them on the same team.", Options: ["0", "1"]),
-        new("mp_solid_teammates", "Teammate collision", "Teams & bots", "boolean", "1", "Allow teammates to physically block one another.", Options: ["0", "1"]),
-        new("bot_quota", "Bot quota", "Teams & bots", "integer", "0", "Number of bots maintained by the server.", 0, 32, 1),
-        new("bot_difficulty", "Bot difficulty", "Teams & bots", "integer", "1", "Bot skill from 0 (easy) to 5 (maximum).", 0, 5, 1),
-        new("bot_quota_mode", "Bot quota mode", "Teams & bots", "select", "normal", "Normal keeps manually added bots stable; fill and match manage bot counts automatically.", Options: ["normal", "fill", "match"]),
-        new("bot_stop", "Freeze all bots", "Teams & bots", "boolean", "0", "Stop bot movement and attacks. Keep this disabled for normal play.", Options: ["0", "1"]),
+        new("mp_autoteambalance", "Auto team balance", "Teams & players", "boolean", "0", "Move players automatically to keep teams balanced.", Options: ["0", "1"]),
+        new("mp_limitteams", "Team difference limit", "Teams & players", "integer", "0", "Maximum team-size difference. Zero allows intentionally stacked practice teams.", 0, 32, 1),
+        new("mp_friendlyfire", "Friendly fire", "Teams & players", "boolean", "0", "Allow teammates to damage one another.", Options: ["0", "1"]),
+        new("mp_teammates_are_enemies", "Free-for-all targeting", "Teams & players", "boolean", "0", "Treat every other player as an enemy, even when CS2 places them on the same team.", Options: ["0", "1"]),
+        new("mp_solid_teammates", "Teammate collision", "Teams & players", "boolean", "1", "Allow teammates to physically block one another.", Options: ["0", "1"]),
+        new("bot_quota", "Bot quota", "Bots", "integer", "0", "Number of bots maintained by the server.", 0, 32, 1),
+        new("bot_difficulty", "Bot difficulty", "Bots", "integer", "1", "Bot skill from 0 (easy) to 5 (maximum).", 0, 5, 1),
+        new("bot_quota_mode", "Bot quota mode", "Bots", "select", "normal", "Normal keeps manually added bots stable; fill and match manage bot counts automatically.", Options: ["normal", "fill", "match"]),
+        new("bot_join_team", "Bot team", "Bots", "select", "any", "Choose whether new bots may join either team or one fixed side.", Options: ["any", "t", "ct"]),
+        new("bot_join_after_player", "Wait for a human", "Bots", "boolean", "0", "Only add bots after the first human player has joined.", Options: ["0", "1"]),
+        new("bot_stop", "Freeze all bots", "Bots", "boolean", "0", "Stop bot movement and attacks. Keep this disabled for normal play.", Options: ["0", "1"]),
 
         new("mp_damage_scale_ct_head", "CT head damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Counter-Terrorist head hits. One is normal damage.", 0, 5, 0.1m),
         new("mp_damage_scale_ct_body", "CT body damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Counter-Terrorist body hits. One is normal damage.", 0, 5, 0.1m),
         new("mp_damage_scale_t_head", "T head damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Terrorist head hits. One is normal damage.", 0, 5, 0.1m),
         new("mp_damage_scale_t_body", "T body damage", "Combat & damage", "decimal", "1", "Damage multiplier applied to Terrorist body hits. One is normal damage.", 0, 5, 0.1m),
         new("mp_damage_headshot_only", "Headshots only", "Combat & damage", "boolean", "0", "Ignore body damage and only accept headshots.", Options: ["0", "1"]),
+
+        new("mp_maxmoney", "Maximum money", "Economy & loadout", "integer", "16000", "Maximum amount of money a player may hold. Zero disables the normal economy.", 0, 65535, 500),
+        new("mp_free_armor", "Spawn armor", "Economy & loadout", "select", "0", "Choose whether players spawn without armor, with armor or with armor and helmet.", Options: ["0", "1", "2"]),
+        new("mp_t_default_primary", "T primary weapon", "Economy & loadout", "select", "", "Primary weapon given to Terrorists on spawn.", Options: ["", "weapon_ssg08"]),
+        new("mp_ct_default_primary", "CT primary weapon", "Economy & loadout", "select", "", "Primary weapon given to Counter-Terrorists on spawn.", Options: ["", "weapon_ssg08"]),
+        new("mp_t_default_secondary", "T secondary weapon", "Economy & loadout", "select", "weapon_glock", "Secondary weapon given to Terrorists on spawn.", Options: ["", "weapon_glock"]),
+        new("mp_ct_default_secondary", "CT secondary weapon", "Economy & loadout", "select", "weapon_hkp2000", "Secondary weapon given to Counter-Terrorists on spawn.", Options: ["", "weapon_hkp2000"]),
 
         new("sv_gravity", "Gravity", "Movement & physics", "integer", "800", "World gravity used for jumps, Surf and ScoutzKnivez.", 100, 2000, 10),
         new("sv_airaccelerate", "Air acceleration", "Movement & physics", "integer", "12", "Mid-air steering strength used by Surf, KZ and Bhop.", 0, 5000, 1),
@@ -57,13 +66,15 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         new("sv_staminajumpcost", "Jump stamina cost", "Movement & physics", "decimal", "0.08", "Stamina consumed by jumping.", 0, 1, 0.01m),
         new("sv_staminalandcost", "Landing stamina cost", "Movement & physics", "decimal", "0.05", "Stamina consumed by landing.", 0, 1, 0.01m),
 
-        new("sv_cheats", "Private-server cheats", "Admin playground", "boolean", "1", "Global CS2 switch required by noclip, bot_kill and training commands. It affects every connected player.", Options: ["0", "1"]),
-        new("sv_infinite_ammo", "Infinite ammunition", "Admin playground", "select", "0", "0 disables it, 1 keeps magazines full, 2 provides infinite reserve ammunition.", Options: ["0", "1", "2"]),
-        new("mp_buy_anywhere", "Buy anywhere", "Admin playground", "boolean", "0", "Allow buying outside normal buy zones.", Options: ["0", "1"]),
-        new("mp_ignore_round_win_conditions", "Ignore win conditions", "Admin playground", "boolean", "0", "Keep practice rounds running after normal win conditions occur.", Options: ["0", "1"]),
-        new("mp_respawn_on_death_ct", "Respawn CT players", "Admin playground", "boolean", "0", "Immediately respawn Counter-Terrorists after death.", Options: ["0", "1"]),
-        new("mp_respawn_on_death_t", "Respawn T players", "Admin playground", "boolean", "0", "Immediately respawn Terrorists after death.", Options: ["0", "1"]),
-        new("mp_respawn_immunitytime", "Respawn protection", "Admin playground", "decimal", "4", "Seconds during which a respawned player cannot take normal damage. Use zero for instant-action arenas.", 0, 30, 0.5m)
+        new("sv_cheats", "Private-server cheats", "Practice & respawn", "boolean", "1", "Global CS2 switch required by noclip, bot_kill and training commands. It affects every connected player.", Options: ["0", "1"]),
+        new("sv_infinite_ammo", "Infinite ammunition", "Practice & respawn", "select", "0", "0 disables it, 1 keeps magazines full, 2 provides infinite reserve ammunition.", Options: ["0", "1", "2"]),
+        new("mp_buy_anywhere", "Buy anywhere", "Practice & respawn", "boolean", "0", "Allow buying outside normal buy zones.", Options: ["0", "1"]),
+        new("mp_ignore_round_win_conditions", "Ignore win conditions", "Practice & respawn", "boolean", "0", "Keep practice rounds running after normal win conditions occur.", Options: ["0", "1"]),
+        new("mp_respawn_on_death_ct", "Respawn CT players", "Practice & respawn", "boolean", "0", "Immediately respawn Counter-Terrorists after death.", Options: ["0", "1"]),
+        new("mp_respawn_on_death_t", "Respawn T players", "Practice & respawn", "boolean", "0", "Immediately respawn Terrorists after death.", Options: ["0", "1"]),
+        new("mp_respawnwavetime_t", "T respawn delay", "Practice & respawn", "decimal", "0", "Delay before a Terrorist respawns in instant-respawn modes.", 0, 30, 0.5m),
+        new("mp_respawnwavetime_ct", "CT respawn delay", "Practice & respawn", "decimal", "0", "Delay before a Counter-Terrorist respawns in instant-respawn modes.", 0, 30, 0.5m),
+        new("mp_respawn_immunitytime", "Respawn protection", "Practice & respawn", "decimal", "4", "Seconds during which a respawned player cannot take normal damage. Use zero for instant-action arenas.", 0, 30, 0.5m)
     ];
 
     public IReadOnlyList<Cs2LiveSettingDescriptor> SettingDefinitions => LiveSettingDefinitions;
@@ -426,7 +437,7 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
         };
         lines.AddRange(LiveSettingDefinitions
             .Where(definition => values.ContainsKey(definition.Key))
-            .Select(definition => $"{definition.Key} {values[definition.Key]}"));
+            .Select(definition => $"{definition.Key} \"{values[definition.Key]}\""));
         File.WriteAllLines(Path.Combine(configDirectory, "dkay-live.cfg"), lines);
     }
 

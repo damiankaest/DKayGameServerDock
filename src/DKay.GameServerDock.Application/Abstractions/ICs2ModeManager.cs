@@ -22,6 +22,14 @@ public interface ICs2ModeManager
         GameServerInstance server,
         string combatMode,
         CancellationToken cancellationToken);
+    Task<Cs2ModeProfile> SetActiveRespawnModeAsync(
+        GameServerInstance server,
+        string respawnMode,
+        CancellationToken cancellationToken);
+    Task<Cs2ModeProfile> SetActiveHudModeAsync(
+        GameServerInstance server,
+        string hudMode,
+        CancellationToken cancellationToken);
     Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server);
     Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key);
     Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(

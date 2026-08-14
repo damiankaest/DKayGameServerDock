@@ -34,8 +34,13 @@ public sealed partial class Cs2LiveControlService(
         new("remove-bots", "Remove bots", "Kick every bot from the server.", "Bots", "−"),
         new("freeze-bots", "Freeze bots", "Enable cheats and stop bot movement for testing.", "Bots", "❄"),
         new("release-bots", "Release bots", "Allow frozen bots to move again.", "Bots", "☀"),
-        new("enable-bhop", "Enable auto-bhop", "Enable uncapped bunnyhopping and jump automatically while jump is held.", "Movement", "↗", "primary"),
+        new("enable-bhop", "Enable auto-bhop", "Enable uncapped bunnyhopping and jump automatically while jump is held.", "Movement", "↗"),
         new("disable-bhop", "Disable auto-bhop", "Return jumping and the movement speed cap to normal CS2 behavior.", "Movement", "↘"),
+        new("respawn-round", "Play the round", "Dead players wait until the current round has been decided.", "Round", "RND"),
+        new("respawn-instant", "Always respawn", "Players return immediately and normal round win conditions stay disabled.", "Round", "∞"),
+        new("hud-hidden", "Clean screen", "Hide the SharpTimer timer, keys, speed and sync display.", "Display", "○", RequiresPlugin: true),
+        new("hud-timer", "Timer only", "Show run and map timing without movement telemetry.", "Display", "◷", RequiresPlugin: true),
+        new("hud-movement", "Movement HUD", "Show timing, keys, velocity and strafe sync.", "Display", "HUD", RequiresPlugin: true),
         new("rtv", "Start RTV vote", "Ask a compatible CounterStrikeSharp map-vote plugin to start RTV.", "Maps", "☑", RequiresPlugin: true)
     ];
 
@@ -71,52 +76,98 @@ public sealed partial class Cs2LiveControlService(
             StringComparer.Ordinal);
         var liveReads = 0;
         var failedReads = 0;
+        var liveValueKeys = new HashSet<string>(StringComparer.Ordinal);
+        string? readFailureMessage = null;
+        string? readFailureDetail = null;
+        var modeState = await modes.GetStateAsync(server, cancellationToken);
+        var activeProfile = modeState.Profiles.FirstOrDefault(profile =>
+            string.Equals(profile.Id, modeState.ActiveProfileId, StringComparison.Ordinal));
+        var activeHudMode = activeProfile?.HudMode ?? "hidden";
+        var hudLiveReadSucceeded = false;
+        var sharpTimerInstalled = modeState.Packages.Any(package =>
+            string.Equals(package.Id, "sharp-timer", StringComparison.Ordinal) && package.Installed);
 
         if (running)
         {
             var adapter = modules.GetRequired(server.TemplateId).Adapter;
-            foreach (var setting in store.SettingDefinitions)
+            var outputs = new List<string?>();
+            try
             {
-                try
+                foreach (var command in BuildLiveReadCommands(store.SettingDefinitions))
                 {
                     var result = await adapter.ExecuteConsoleCommandAsync(
                         server,
                         processes,
-                        adapter.NormalizeConsoleCommand(setting.Key),
+                        adapter.NormalizeConsoleCommand(command),
                         cancellationToken);
-                    if (TryReadConsoleVariable(setting.Key, result.Output, out var value) &&
-                        TryNormalizeReportedValue(setting, value, out var normalized))
+                    outputs.Add(result.Output);
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                readFailureDetail = exception.Message;
+            }
+
+            var liveOutput = string.Join(Environment.NewLine, outputs);
+            foreach (var setting in store.SettingDefinitions)
+            {
+                if (TryReadConsoleVariable(setting.Key, liveOutput, out var value) &&
+                    TryNormalizeReportedValue(setting, value, out var normalized))
+                {
+                    values[setting.Key] = normalized;
+                    liveValueKeys.Add(setting.Key);
+                    liveReads++;
+                }
+                else
+                {
+                    failedReads++;
+                }
+            }
+
+            if (readFailureDetail is not null)
+            {
+                readFailureMessage = liveReads > 0
+                    ? $"Read {liveReads} settings from CS2; remaining values use their saved fallback because RCON reading stopped: {readFailureDetail}"
+                    : $"Saved values are shown because live RCON reading failed: {readFailureDetail}";
+            }
+
+            if (sharpTimerInstalled && readFailureMessage is null)
+            {
+                try
+                {
+                    var hudResult = await adapter.ExecuteConsoleCommandAsync(
+                        server,
+                        processes,
+                        adapter.NormalizeConsoleCommand(BuildVerificationCommand(BuildHudLiveValues("movement"))),
+                        cancellationToken);
+                    if (TryResolveReportedHudMode(hudResult.Output, out var reportedHudMode))
                     {
-                        values[setting.Key] = normalized;
-                        liveReads++;
-                    }
-                    else
-                    {
-                        failedReads++;
+                        activeHudMode = reportedHudMode;
+                        hudLiveReadSucceeded = true;
                     }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    failedReads++;
-                    if (liveReads == 0)
-                    {
-                        return BuildState(
-                            server,
-                            running,
-                            values,
-                            false,
-                            $"Saved values are shown because live RCON reading failed: {exception.Message}");
-                    }
+                    readFailureMessage ??= $"Core values are live; the SharpTimer HUD status could not be read: {exception.Message}";
                 }
             }
         }
 
-        var message = !running
+        var message = readFailureMessage ?? (!running
             ? "Saved values are shown. They will be loaded automatically on the next server start."
             : failedReads == 0
                 ? $"Read all {liveReads} settings directly from the running CS2 process."
-                : $"Read {liveReads} live settings; {failedReads} unsupported values use their saved fallback.";
-        return BuildState(server, running, values, running && liveReads > 0, message);
+                : $"Read {liveReads} live settings; {failedReads} unsupported values use their saved fallback.");
+        return BuildState(
+            server,
+            running,
+            values,
+            running && liveReads > 0,
+            message,
+            liveValueKeys,
+            activeHudMode,
+            hudLiveReadSucceeded,
+            sharpTimerInstalled);
     }
 
     public async Task<Cs2LiveConfigurationApplyResult> ApplyAsync(
@@ -179,6 +230,8 @@ public sealed partial class Cs2LiveControlService(
         }
 
         var combatMode = ResolveCombatModeAction(request.ActionId);
+        var respawnMode = ResolveRespawnModeAction(request.ActionId);
+        var hudMode = ResolveHudModeAction(request.ActionId);
         if (request.ActionId == "repair-team-damage")
         {
             var savedState = await modes.GetStateAsync(server, cancellationToken);
@@ -187,12 +240,21 @@ public sealed partial class Cs2LiveControlService(
                 ?? throw new InvalidOperationException("Select and activate a map profile before reapplying its combat mode.");
         }
         var sharpTimerInstalled = false;
-        if (combatMode is not null)
+        if (combatMode is not null || hudMode is not null)
         {
-            await modes.SetActiveCombatModeAsync(server, combatMode, cancellationToken);
             var modeState = await modes.GetStateAsync(server, cancellationToken);
             sharpTimerInstalled = modeState.Packages.Any(package =>
                 string.Equals(package.Id, "sharp-timer", StringComparison.Ordinal) && package.Installed);
+        }
+
+        if (hudMode is not null && !sharpTimerInstalled)
+        {
+            throw new InvalidOperationException("Install SharpTimer before changing its in-game HUD.");
+        }
+
+        if (combatMode is not null)
+        {
+            await modes.SetActiveCombatModeAsync(server, combatMode, cancellationToken);
             var persistentValues = store.ReadLiveSettings(server).ToDictionary(
                 pair => pair.Key,
                 pair => pair.Value,
@@ -205,10 +267,32 @@ public sealed partial class Cs2LiveControlService(
             store.SaveLiveSettings(server, persistentValues);
         }
 
+        if (respawnMode is not null)
+        {
+            await modes.SetActiveRespawnModeAsync(server, respawnMode, cancellationToken);
+            var persistentValues = store.ReadLiveSettings(server).ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value,
+                StringComparer.Ordinal);
+            foreach (var (key, value) in BuildRespawnLiveValues(respawnMode))
+            {
+                persistentValues[key] = value;
+            }
+
+            store.SaveLiveSettings(server, persistentValues);
+        }
+
+        if (hudMode is not null)
+        {
+            await modes.SetActiveHudModeAsync(server, hudMode, cancellationToken);
+        }
+
         var command = request.ActionId switch
         {
             "change-map" => BuildChangeMapCommand(request.Value),
             _ when combatMode is not null => BuildCombatApplyCommand(combatMode, sharpTimerInstalled),
+            _ when respawnMode is not null => BuildApplyCommand(BuildRespawnLiveValues(respawnMode)),
+            _ when hudMode is not null => BuildApplyCommand(BuildHudLiveValues(hudMode)),
             _ when ActionCommands.TryGetValue(request.ActionId, out var knownCommand) => knownCommand,
             _ => throw new InvalidOperationException($"Unknown CS2 quick action '{request.ActionId}'.")
         };
@@ -271,6 +355,37 @@ public sealed partial class Cs2LiveControlService(
                 Output = $"Live combat mode '{combatMode}' applied and verified without restarting the round."
             };
         }
+        else
+        {
+            IReadOnlyDictionary<string, string>? expectedValues = request.ActionId switch
+            {
+                "enable-bhop" => BuildBhopLiveValues(true),
+                "disable-bhop" => BuildBhopLiveValues(false),
+                _ when respawnMode is not null => BuildRespawnLiveValues(respawnMode),
+                _ when hudMode is not null => BuildHudLiveValues(hudMode),
+                _ => null
+            };
+            if (expectedValues is not null)
+            {
+                var verification = await adapter.ExecuteConsoleCommandAsync(
+                    server,
+                    processes,
+                    adapter.NormalizeConsoleCommand(BuildVerificationCommand(expectedValues)),
+                    cancellationToken);
+                var failures = FindVerificationFailures(expectedValues, verification.Output);
+                if (failures.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"CS2 accepted the action, but live verification failed for {string.Join(", ", failures)}. " +
+                        "Refresh the live values and inspect the Console for a map or plugin override.");
+                }
+
+                var policy = hudMode is not null ? $"HUD mode '{hudMode}'"
+                    : respawnMode is not null ? $"respawn mode '{respawnMode}'"
+                    : request.ActionId == "enable-bhop" ? "auto-bhop enabled" : "auto-bhop disabled";
+                result = result with { Output = $"Live {policy} applied and verified." };
+            }
+        }
         await events.RecordAsync(
             ServerEvent.Create(
                 server.Id,
@@ -293,6 +408,118 @@ public sealed partial class Cs2LiveControlService(
         "combat-ffa" => "ffa",
         _ => null
     };
+
+    internal static string? ResolveRespawnModeAction(string actionId) => actionId switch
+    {
+        "respawn-round" => "round",
+        "respawn-instant" => "instant",
+        _ => null
+    };
+
+    internal static string? ResolveHudModeAction(string actionId) => actionId switch
+    {
+        "hud-hidden" => "hidden",
+        "hud-timer" => "timer",
+        "hud-movement" => "movement",
+        _ => null
+    };
+
+    internal static IReadOnlyDictionary<string, string> BuildRespawnLiveValues(string respawnMode)
+    {
+        if (respawnMode is not ("round" or "instant"))
+        {
+            throw new ArgumentException("Respawn mode must be round or instant.", nameof(respawnMode));
+        }
+
+        var enabled = respawnMode == "instant" ? "1" : "0";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mp_respawn_on_death_t"] = enabled,
+            ["mp_respawn_on_death_ct"] = enabled,
+            ["mp_ignore_round_win_conditions"] = enabled
+        };
+    }
+
+    internal static IReadOnlyDictionary<string, string> BuildBhopLiveValues(bool enabled) =>
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sv_enablebunnyhopping"] = enabled ? "1" : "0",
+            ["sv_autobunnyhopping"] = enabled ? "1" : "0"
+        };
+
+    internal static IReadOnlyDictionary<string, string> BuildHudLiveValues(string hudMode)
+    {
+        if (hudMode is not ("hidden" or "timer" or "movement"))
+        {
+            throw new ArgumentException("SharpTimer HUD mode must be hidden, timer or movement.", nameof(hudMode));
+        }
+
+        var timerVisible = hudMode == "hidden" ? "0" : "1";
+        var movementVisible = hudMode == "movement" ? "1" : "0";
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sharptimer_enable_timer_hud"] = timerVisible,
+            ["sharptimer_enable_keys_hud"] = movementVisible,
+            ["sharptimer_enable_velocity_hud"] = movementVisible,
+            ["sharptimer_enable_strafesync_hud"] = movementVisible,
+            ["sharptimer_enable_rankicons_hud"] = movementVisible,
+            ["sharptimer_enable_map_tier_hud"] = timerVisible,
+            ["sharptimer_enable_map_type_hud"] = timerVisible,
+            ["sharptimer_enable_map_name_hud"] = timerVisible
+        };
+    }
+
+    internal static string BuildApplyCommand(IReadOnlyDictionary<string, string> values) =>
+        string.Join("; ", values.Select(pair => $"{pair.Key} {pair.Value}"));
+
+    internal static string BuildVerificationCommand(IReadOnlyDictionary<string, string> values) =>
+        string.Join("; ", values.Keys);
+
+    internal static IReadOnlyList<string> FindVerificationFailures(
+        IReadOnlyDictionary<string, string> expectedValues,
+        string? output) =>
+        expectedValues
+            .Where(pair => !TryReadConsoleVariable(pair.Key, output, out var reported) ||
+                           !ConsoleValuesMatch(pair.Value, reported))
+            .Select(pair => pair.Key)
+            .ToArray();
+
+    internal static bool TryResolveReportedHudMode(string? output, out string hudMode)
+    {
+        hudMode = string.Empty;
+        var expectedKeys = BuildHudLiveValues("movement").Keys;
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var key in expectedKeys)
+        {
+            if (!TryReadConsoleVariable(key, output, out var value))
+            {
+                return false;
+            }
+
+            values[key] = value;
+        }
+
+        var movementVisible = new[]
+        {
+            "sharptimer_enable_keys_hud",
+            "sharptimer_enable_velocity_hud",
+            "sharptimer_enable_strafesync_hud",
+            "sharptimer_enable_rankicons_hud"
+        }.Any(key => ConsoleValuesMatch("1", values[key]));
+        var timerVisible = new[]
+        {
+            "sharptimer_enable_timer_hud",
+            "sharptimer_enable_map_tier_hud",
+            "sharptimer_enable_map_type_hud",
+            "sharptimer_enable_map_name_hud"
+        }.Any(key => ConsoleValuesMatch("1", values[key]));
+        hudMode = movementVisible
+            ? "movement"
+            : timerVisible
+                ? "timer"
+                : "hidden";
+        return true;
+    }
 
     internal static IReadOnlyDictionary<string, string> BuildCombatLiveValues(string combatMode)
     {
@@ -452,15 +679,54 @@ public sealed partial class Cs2LiveControlService(
         bool running,
         IReadOnlyDictionary<string, string> values,
         bool liveReadSucceeded,
-        string liveReadMessage) => new(
+        string liveReadMessage,
+        IReadOnlySet<string> liveValueKeys,
+        string activeHudMode,
+        bool hudLiveReadSucceeded,
+        bool sharpTimerInstalled) => new(
             running,
             liveReadSucceeded,
             liveReadMessage,
+            clock.UtcNow,
+            liveValueKeys.OrderBy(key => key, StringComparer.Ordinal).ToArray(),
             store.SettingDefinitions,
             values,
             ActionDescriptors,
             store.GetGsltState(server),
-            mapChanges.GetState(server.Id));
+            mapChanges.GetState(server.Id),
+            activeHudMode,
+            hudLiveReadSucceeded,
+            sharpTimerInstalled);
+
+    internal static IReadOnlyList<string> BuildLiveReadCommands(
+        IReadOnlyList<Cs2LiveSettingDescriptor> settings,
+        int maximumLength = 480)
+    {
+        var commands = new List<string>();
+        var keys = new List<string>();
+        var length = 0;
+        foreach (var setting in settings)
+        {
+            var addedLength = setting.Key.Length + (keys.Count == 0 ? 0 : 2);
+            if (keys.Count > 0 && length + addedLength > maximumLength)
+            {
+                commands.Add(string.Join("; ", keys));
+                keys.Clear();
+                length = 0;
+                addedLength = setting.Key.Length;
+            }
+
+            keys.Add(setting.Key);
+            length += addedLength;
+        }
+
+        if (keys.Count > 0)
+        {
+            commands.Add(string.Join("; ", keys));
+        }
+
+        return commands;
+    }
 
     private async Task<GameServerInstance> GetCs2ServerAsync(Guid serverId, CancellationToken cancellationToken)
     {
@@ -495,7 +761,7 @@ public sealed partial class Cs2LiveControlService(
 
         var match = Regex.Match(
             output,
-            $"(?:^|[\\r\\n\\s])\\\"?{Regex.Escape(key)}\\\"?\\s*=\\s*\\\"?(?<value>[^\\\"\\s\\(\\r\\n]+)",
+            $"(?:^|[\\r\\n\\s])\\\"?{Regex.Escape(key)}\\\"?\\s*=\\s*\\\"?(?<value>[^\\\"\\s\\(\\r\\n]*)",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
         if (!match.Success)
         {
@@ -503,7 +769,7 @@ public sealed partial class Cs2LiveControlService(
         }
 
         value = match.Groups["value"].Value.Trim();
-        return value.Length > 0;
+        return true;
     }
 
     internal static bool TryNormalizeReportedValue(

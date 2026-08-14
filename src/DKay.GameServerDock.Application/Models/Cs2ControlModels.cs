@@ -31,11 +31,16 @@ public sealed record Cs2LiveControlState(
     bool Running,
     bool LiveReadSucceeded,
     string LiveReadMessage,
+    DateTimeOffset ObservedAt,
+    IReadOnlyList<string> LiveValueKeys,
     IReadOnlyList<Cs2LiveSettingDescriptor> Settings,
     IReadOnlyDictionary<string, string> Values,
     IReadOnlyList<Cs2QuickActionDescriptor> Actions,
     Cs2GsltState Gslt,
-    Cs2MapChangeState MapChange);
+    Cs2MapChangeState MapChange,
+    string ActiveHudMode,
+    bool HudLiveReadSucceeded,
+    bool SharpTimerInstalled);
 
 public sealed record Cs2MapChangeState(
     string Status,
