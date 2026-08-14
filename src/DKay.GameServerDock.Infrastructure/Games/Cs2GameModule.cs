@@ -71,8 +71,13 @@ public sealed class Cs2GameModule(
             arguments.Add(activeProfile?.MapName ?? settings.Get("initialMap", "de_mirage"));
             arguments.Add("+exec");
             arguments.Add("dkay-server.cfg");
-            // Live Control values intentionally run after the selected map preset so the admin's
-            // explicit runtime overrides remain authoritative across preset and game updates.
+            // Execute the global combat layer explicitly as well as through newly generated
+            // dkay-server.cfg files. This keeps existing installations authoritative immediately
+            // after a Hub-only update, before the administrator runs another SteamCMD update.
+            arguments.Add("+exec");
+            arguments.Add("dkay-combat.cfg");
+            // Live Control values intentionally run last so the admin's explicit runtime
+            // overrides remain authoritative across preset and game updates.
             arguments.Add("+exec");
             arguments.Add("dkay-live.cfg");
         }

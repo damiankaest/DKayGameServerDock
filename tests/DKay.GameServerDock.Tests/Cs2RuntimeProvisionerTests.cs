@@ -249,6 +249,53 @@ public sealed class Cs2RuntimeProvisionerTests
     }
 
     [Fact]
+    public void Global_combat_override_survives_preset_alignment()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "game", "csgo", "cfg"));
+        var server = CreateServer(root, 27015);
+
+        try
+        {
+            var provisioner = new Cs2RuntimeProvisioner(new DockOptions());
+            provisioner.SaveLiveSettings(server, new Dictionary<string, string>
+            {
+                ["mp_friendlyfire"] = "1",
+                ["mp_teammates_are_enemies"] = "1",
+                ["mp_damage_scale_ct_body"] = "1",
+                ["mp_damage_scale_t_body"] = "1"
+            });
+            provisioner.SaveCombatModeOverride(server, "ffa");
+
+            provisioner.AlignPersistedLiveSettingsWithPreset(server, new Dictionary<string, string>
+            {
+                ["mp_friendlyfire"] = "0",
+                ["mp_teammates_are_enemies"] = "0",
+                ["mp_damage_scale_ct_body"] = "0",
+                ["mp_damage_scale_t_body"] = "0",
+                ["mp_respawn_on_death_ct"] = "1"
+            });
+
+            var settings = provisioner.ReadLiveSettings(server);
+            Assert.Equal("ffa", provisioner.ReadCombatModeOverride(server));
+            Assert.Equal("1", settings["mp_friendlyfire"]);
+            Assert.Equal("1", settings["mp_teammates_are_enemies"]);
+            Assert.Equal("1", settings["mp_damage_scale_ct_body"]);
+            Assert.Equal("1", settings["mp_damage_scale_t_body"]);
+            Assert.Equal("1", settings["mp_respawn_on_death_ct"]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Steam_workshop_key_is_masked_and_survives_generated_file_replacement()
     {
         if (OperatingSystem.IsWindows())
@@ -321,6 +368,7 @@ public sealed class Cs2RuntimeProvisionerTests
             Assert.Contains($"host_workshop_map {publishedFileId}", launchConfig, StringComparison.Ordinal);
             Assert.Contains("sv_debug_ugc_downloads 1", launchConfig, StringComparison.Ordinal);
             Assert.Contains("exec dkay-server.cfg", launchConfig, StringComparison.Ordinal);
+            Assert.Contains("exec dkay-combat.cfg", launchConfig, StringComparison.Ordinal);
             Assert.Contains("exec dkay-live.cfg", launchConfig, StringComparison.Ordinal);
             Assert.DoesNotContain(key, launchConfig, StringComparison.Ordinal);
             Assert.Throws<InvalidOperationException>(() =>

@@ -395,6 +395,9 @@ export interface Cs2LiveControlState {
   activePracticeMode: Cs2PracticeMode;
   practiceLiveReadSucceeded: boolean;
   sharpTimerInstalled: boolean;
+  activeCombatMode: Cs2CombatMode;
+  combatLiveReadSucceeded: boolean;
+  combatOverrideActive: boolean;
 }
 
 export interface Cs2MapChangeState {

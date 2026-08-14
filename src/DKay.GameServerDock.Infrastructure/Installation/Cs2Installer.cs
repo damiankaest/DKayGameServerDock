@@ -52,7 +52,10 @@ public sealed class Cs2Installer(
             "sv_broadcast_ugc_downloads 1",
             "sv_broadcast_ugc_download_progress_interval 5",
             "log on",
-            "exec dkay-mode.cfg"
+            "exec dkay-mode.cfg",
+            // This contains the administrator's global damage policy and SharpTimer override.
+            // It must run after every map preset and before generic live values.
+            "exec dkay-combat.cfg"
         };
         await File.WriteAllLinesAsync(Path.Combine(configDirectory, "dkay-server.cfg"), lines, cancellationToken);
         var modeConfigPath = Path.Combine(configDirectory, "dkay-mode.cfg");

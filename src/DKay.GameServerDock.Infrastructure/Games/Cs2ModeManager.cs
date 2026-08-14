@@ -1046,7 +1046,10 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
         Cs2ModePresetDescriptor preset,
         CancellationToken cancellationToken)
     {
-        var combatMode = Cs2ModeCatalog.ResolveCombatMode(preset, profile.CombatMode);
+        // A live administrator decision is server-wide and intentionally outranks every map
+        // profile. It remains in force until another live combat action replaces it.
+        var combatMode = runtime.ReadCombatModeOverride(server)
+            ?? Cs2ModeCatalog.ResolveCombatMode(preset, profile.CombatMode);
         var ammoMode = Cs2ModeCatalog.ResolveAmmoMode(preset, profile.AmmoMode);
         var hudMode = Cs2ModeCatalog.ResolveHudMode(preset, profile.HudMode);
         var respawnMode = Cs2ModeCatalog.ResolveRespawnMode(preset, profile.RespawnMode);
@@ -1153,7 +1156,9 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
 
     private static string FormatCfgValue(string value)
     {
-        if (NumericValuePattern().IsMatch(value))
+        if (NumericValuePattern().IsMatch(value) ||
+            value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("false", StringComparison.OrdinalIgnoreCase))
         {
             return value;
         }

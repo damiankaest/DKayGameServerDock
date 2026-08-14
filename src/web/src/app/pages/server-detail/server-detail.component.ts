@@ -387,6 +387,9 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   activeCombatMode(): Cs2CombatMode {
+    if (this.liveControl()?.activeCombatMode) {
+      return this.liveControl()!.activeCombatMode;
+    }
     const values = this.liveObservedValues();
     if (Number(values['mp_damage_scale_ct_body']) === 0 && Number(values['mp_damage_scale_t_body']) === 0) {
       return 'peaceful';
@@ -397,12 +400,20 @@ export class ServerDetailComponent implements OnDestroy {
     return this.livePolicyObserved('combat') ? 'team' : this.activeModeProfile()?.combatMode ?? 'team';
   }
 
-  combatModeForAction(actionId: string): Cs2CombatMode | null {
-    return ({
-      'combat-peaceful': 'peaceful',
-      'combat-team': 'team',
-      'combat-ffa': 'ffa'
-    } as Record<string, Cs2CombatMode>)[actionId] ?? null;
+  enemyDamageEnabled(): boolean {
+    return this.activeCombatMode() !== 'peaceful';
+  }
+
+  teamDamageEnabled(): boolean {
+    return this.activeCombatMode() === 'ffa';
+  }
+
+  isCombatActionActive(actionId: string): boolean {
+    return actionId === 'combat-enemy-on' ? this.enemyDamageEnabled()
+      : actionId === 'combat-enemy-off' ? !this.enemyDamageEnabled()
+      : actionId === 'combat-team-on' ? this.teamDamageEnabled()
+      : actionId === 'combat-team-off' ? !this.teamDamageEnabled()
+      : false;
   }
 
   private utilityLiveActions(): Cs2QuickAction[] {
@@ -508,7 +519,7 @@ export class ServerDetailComponent implements OnDestroy {
     if (kind === 'profile') return this.activeModeProfile()?.presetName || 'No profile';
     if (kind === 'players') return String(this.server()?.players.length ?? 0);
     if (kind === 'bots') return `${values['bot_quota'] ?? '—'} · level ${values['bot_difficulty'] ?? '—'}`;
-    if (kind === 'combat') return this.activeCombatMode() === 'ffa' ? 'Free for all' : this.activeCombatMode() === 'peaceful' ? 'Peaceful' : 'CT vs T';
+    if (kind === 'combat') return this.activeCombatMode() === 'ffa' ? 'Enemy + team damage' : this.activeCombatMode() === 'peaceful' ? 'All damage off' : 'Enemy damage only';
     if (kind === 'respawn') return this.activeRespawnMode() === 'instant' ? 'Instant' : this.activeRespawnMode() === 'round' ? 'Round based' : 'Mixed';
     if (kind === 'movement') return this.activeBhopMode() === 'enabled' ? 'Auto-bhop on' : this.activeBhopMode() === 'disabled' ? 'Normal jumping' : 'Custom';
     if (kind === 'practice') return this.activeModeProfile()?.presetId === 'kz' ? 'Native CS2KZ' : this.activePracticeMode() === 'anywhere' ? 'Air checkpoints' : this.activePracticeMode() === 'ground' ? 'Ground checkpoints' : 'Timer only';
@@ -523,11 +534,10 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   livePolicyObserved(policy: 'combat' | 'bhop' | 'respawn' | 'hud' | 'practice'): boolean {
+    if (policy === 'combat') return this.liveControl()?.combatLiveReadSucceeded ?? false;
     if (policy === 'hud') return this.liveControl()?.hudLiveReadSucceeded ?? false;
     if (policy === 'practice') return this.liveControl()?.practiceLiveReadSucceeded ?? false;
-    const keys = policy === 'combat'
-      ? ['mp_friendlyfire', 'mp_teammates_are_enemies', 'mp_damage_scale_ct_head', 'mp_damage_scale_ct_body', 'mp_damage_scale_t_head', 'mp_damage_scale_t_body', 'mp_damage_headshot_only']
-      : policy === 'bhop'
+    const keys = policy === 'bhop'
         ? ['sv_enablebunnyhopping', 'sv_autobunnyhopping']
         : ['mp_respawn_on_death_t', 'mp_respawn_on_death_ct', 'mp_ignore_round_win_conditions'];
     return keys.every(key => this.isLiveSettingObserved(key));
@@ -1016,11 +1026,18 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   private reflectLiveAction(actionId: string): void {
-    const combatMode = ({
+    const directCombatMode = ({
       'combat-peaceful': 'peaceful',
       'combat-team': 'team',
       'combat-ffa': 'ffa'
     } as const)[actionId as 'combat-peaceful' | 'combat-team' | 'combat-ffa'];
+    const currentCombatMode = this.activeCombatMode();
+    const combatMode: Cs2CombatMode | undefined = directCombatMode
+      ?? (actionId === 'combat-enemy-on' ? (currentCombatMode === 'ffa' ? 'ffa' : 'team')
+        : actionId === 'combat-enemy-off' ? 'peaceful'
+        : actionId === 'combat-team-on' ? 'ffa'
+        : actionId === 'combat-team-off' ? (currentCombatMode === 'peaceful' ? 'peaceful' : 'team')
+        : undefined);
     if (combatMode) {
       const damageScale = combatMode === 'peaceful' ? '0' : '1';
       this.reflectObservedValues({
@@ -1030,8 +1047,15 @@ export class ServerDetailComponent implements OnDestroy {
         mp_damage_scale_ct_body: damageScale,
         mp_damage_scale_t_head: damageScale,
         mp_damage_scale_t_body: damageScale,
-        mp_damage_headshot_only: '0'
+        mp_damage_headshot_only: '0',
+        mp_respawn_immunitytime: '0'
       });
+      this.liveControl.update(control => control ? {
+        ...control,
+        activeCombatMode: combatMode,
+        combatLiveReadSucceeded: true,
+        combatOverrideActive: true
+      } : control);
       this.updateActiveProfilePolicy({ combatMode });
       return;
     }

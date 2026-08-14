@@ -278,26 +278,26 @@
 
           <section class="panel full live-combat-panel">
             <header>
-              <div><p class="eyebrow">LIVE COMBAT</p><h2>Who can damage whom?</h2><p>Switch the active rule immediately. The Hub verifies CS2 and SharpTimer before showing success.</p></div>
-              <div class="live-mode-state"><span class="live-mode-badge">{{ activeCombatMode() === 'peaceful' ? 'PEACEFUL' : activeCombatMode() === 'ffa' ? 'FREE FOR ALL' : 'CT VS T' }}</span><small [attr.data-source]="livePolicyObserved('combat') ? 'live' : 'saved'">{{ livePolicyObserved('combat') ? '● LIVE FROM CS2' : '○ SAVED FALLBACK' }}</small></div>
+              <div><p class="eyebrow">GLOBAL DAMAGE CONTROL</p><h2>Enemy and team damage</h2><p>These switches outrank every preset, Workshop map and SharpTimer map config. Changes apply to the running round and survive map changes.</p></div>
+              <div class="live-mode-state"><span class="live-mode-badge">ENEMY {{ enemyDamageEnabled() ? 'ON' : 'OFF' }} · TEAM {{ teamDamageEnabled() ? 'ON' : 'OFF' }}</span><small [attr.data-source]="control.combatOverrideActive ? 'live' : 'saved'">{{ control.combatOverrideActive ? '● GLOBAL ADMIN OVERRIDE' : '○ PRESET DEFAULT' }}</small></div>
             </header>
             <div class="combat-mode-selector" role="group" aria-label="Live combat mode">
               @for (action of combatActions(); track action.id) {
                 <button type="button"
-                  [class.selected]="(!control.running || livePolicyObserved('combat')) && activeCombatMode() === combatModeForAction(action.id)"
+                  [class.selected]="isCombatActionActive(action.id)"
                   [class.loading]="liveAction() === action.id"
                   [disabled]="!control.running || liveAction() !== ''"
                   (click)="runLiveAction(action)">
                   <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
                   <div><strong>{{ action.label }}</strong><small>{{ action.description }}</small></div>
-                  @if ((!control.running || livePolicyObserved('combat')) && activeCombatMode() === combatModeForAction(action.id)) { <b>ACTIVE</b> }
+                  @if (isCombatActionActive(action.id)) { <b>ACTIVE</b> }
                 </button>
               }
             </div>
             <footer>
-              <span>Applies during the current round and stays active after map changes.</span>
+              <span>Turning team damage on also enables enemy damage. Turning enemy damage off safely blocks all player damage.</span>
               @if (repairCombatAction(); as repair) {
-                <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Reapplying…' : '↻ Reapply current mode' }}</button>
+                <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Forcing…' : '↻ Force current policy now' }}</button>
               }
             </footer>
           </section>
