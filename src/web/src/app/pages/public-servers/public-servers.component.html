@@ -57,7 +57,40 @@
                 <p>{{ server.status === 'Running' ? 'No friends have joined yet — be the first.' : 'Player presence appears when the server is online.' }}</p>
               }
             </section>
+            @if (server.maps.length) {
+              <section class="guest-map-library">
+                <header>
+                  <span><small>MAP LIBRARY</small><strong>{{ server.maps.length }} available map{{ server.maps.length === 1 ? '' : 's' }}</strong></span>
+                  <em [class.ready]="server.recordsAvailable">{{ server.recordsAvailable ? 'Live records' : 'Waiting for timer' }}</em>
+                </header>
+                <p>{{ server.recordsMessage }}</p>
+                <div class="guest-map-grid">
+                  @for (map of server.maps; track map.profileId) {
+                    <article class="guest-map-card" [class.active]="map.active">
+                      <div class="guest-map-cover">
+                        @if (map.previewUrl) { <img [src]="map.previewUrl" [alt]="map.title" loading="lazy" /> } @else { <span>{{ map.presetName.slice(0, 4) }}</span> }
+                        <b>{{ map.active ? 'PLAYING NOW' : map.workshopInstallState === 'pending' ? 'DOWNLOAD PENDING' : map.presetName }}</b>
+                      </div>
+                      <div class="guest-map-body">
+                        <header><span><strong>{{ map.title }}</strong><code>{{ map.mapName }}</code></span>@if (map.records.length) { <b>#1 {{ map.records[0].formattedTime }}</b> }</header>
+                        <div class="guest-map-stats"><span><b>{{ map.playCount }}</b><small>plays</small></span><span><b>{{ map.uniqueRunners }}</b><small>runners</small></span><span><b>{{ map.totalCompletions }}</b><small>finishes</small></span><span><b>{{ formatPlayed(map.lastPlayedAt) }}</b><small>last played</small></span></div>
+                        @if (map.records.length) {
+                          <ol class="guest-records">
+                            @for (record of map.records; track record.rank + record.playerName) {
+                              <li><b>{{ record.rank }}</b><span>{{ record.playerName }}</span><code>{{ record.formattedTime }}</code><small>{{ record.completions }} finish{{ record.completions === 1 ? '' : 'es' }}</small></li>
+                            }
+                          </ol>
+                        } @else {
+                          <div class="guest-no-record"><span>◇</span><p>No finished timer run on this map yet.</p></div>
+                        }
+                      </div>
+                    </article>
+                  }
+                </div>
+              </section>
+            }
             <div class="guest-connect-hint"><small>GAME CONSOLE</small><code>connect {{ server.joinAddress }}</code></div>
+            <button class="steam-join" type="button" [disabled]="server.status !== 'Running'" (click)="join(server.joinAddress)"><span>▶</span><b>Open CS2 & join</b><small>Launches through Steam</small></button>
             <button class="copy-address" type="button" [disabled]="server.status !== 'Running'" (click)="copy(server.joinAddress)">
               <span><small>SERVER ADDRESS</small><code>{{ server.joinAddress }}</code></span>
               <b>{{ copied() === server.joinAddress ? '✓ Copied' : 'Copy address' }}</b>

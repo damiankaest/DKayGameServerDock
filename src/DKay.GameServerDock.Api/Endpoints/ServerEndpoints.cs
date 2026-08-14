@@ -305,6 +305,7 @@ public static class ServerEndpoints
         IGameModuleRegistry modules,
         IProcessSupervisor processes,
         ICs2ModeManager cs2Modes,
+        ICs2CommunityStatsProvider cs2CommunityStats,
         DockOptions dockOptions,
         CancellationToken cancellationToken)
     {
@@ -325,6 +326,9 @@ public static class ServerEndpoints
             .Select(server => new { Server = server, Publication = ServerPublicationSettings.Read(server) })
             .Where(item => item.Publication.Published)
             .ToArray();
+        var recentEvents = publishedItems.Any(item => item.Server.TemplateId == "counter-strike-2")
+            ? await servers.GetEventsAsync(null, 1000, cancellationToken)
+            : [];
         var publishedServers = await Task.WhenAll(publishedItems.Select(async item =>
         {
             var module = modules.GetRequired(item.Server.TemplateId);
@@ -346,9 +350,45 @@ public static class ServerEndpoints
                 }
             }
 
-            var activeMode = item.Server.TemplateId == "counter-strike-2"
-                ? cs2Modes.GetActiveProfile(item.Server)
-                : null;
+            Cs2ModeState? modeState = null;
+            Cs2ModeProfile? activeMode = null;
+            Cs2CommunityStats? communityStats = null;
+            if (item.Server.TemplateId == "counter-strike-2")
+            {
+                modeState = await cs2Modes.GetStateAsync(item.Server, cancellationToken);
+                activeMode = modeState.Profiles.FirstOrDefault(profile => profile.Id == modeState.ActiveProfileId);
+                try
+                {
+                    communityStats = await cs2CommunityStats.GetAsync(
+                        item.Server,
+                        modeState,
+                        recentEvents.Where(serverEvent => serverEvent.ServerId == item.Server.Id).ToArray(),
+                        currentMap,
+                        cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // Timing data is optional public enrichment. Never hide a published join
+                    // address because SharpTimer is writing, migrating or repairing its files.
+                    communityStats = new Cs2CommunityStats(
+                        modeState.Profiles.Select(profile => new Cs2CommunityMapStats(
+                            profile.Id,
+                            profile.MapName,
+                            profile.WorkshopTitle ?? profile.MapName,
+                            profile.WorkshopId,
+                            profile.WorkshopPreviewUrl,
+                            profile.PresetName,
+                            profile.WorkshopInstallState,
+                            profile.Id == modeState.ActiveProfileId || string.Equals(profile.MapName, currentMap, StringComparison.OrdinalIgnoreCase),
+                            0,
+                            null,
+                            0,
+                            0,
+                            [])).ToArray(),
+                        false,
+                        "Timing records are temporarily unavailable; joining the server still works.");
+                }
+            }
             var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(item.Server.SettingsJson) ?? [];
             var passwordProtected = descriptor.Settings
                 .Where(setting => setting.Secret)
@@ -383,6 +423,9 @@ public static class ServerEndpoints
                 Players = humanPlayers,
                 Mode = activeMode?.PresetName,
                 Map = currentMap ?? activeMode?.MapName,
+                Maps = communityStats?.Maps ?? [],
+                RecordsAvailable = communityStats?.RecordsAvailable ?? false,
+                RecordsMessage = communityStats?.RecordsMessage ?? "Timing records are not available for this game.",
                 item.Server.UpdatedAt
             };
         }));

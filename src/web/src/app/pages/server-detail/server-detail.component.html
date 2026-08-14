@@ -184,6 +184,18 @@
                     @else { Arena flow: players return immediately and normal round win conditions stay disabled. }
                   </small>
                 </label>
+                <label class="mode-policy-field">In-game timer & checkpoints
+                  @if (preset.id === 'kz') {
+                    <div class="mode-managed-value"><b>Managed by CS2KZ</b><span>Timer, checkpoints and teleports are provided by the official KZ plugin inside CS2.</span></div>
+                  } @else {
+                    <select [value]="modePractice()" (change)="updateModePractice($event)">
+                      <option value="disabled">Timer only · checkpoints disabled</option>
+                      <option value="ground">Checkpoints on the ground</option>
+                      <option value="anywhere">Surf practice · save in air with speed</option>
+                    </select>
+                    <small>Players use <code>!cp</code>, <code>!tp</code>, <code>!prevcp</code>, <code>!nextcp</code> and <code>!r</code> inside CS2. The admin panel only defines what SharpTimer allows for this map.</small>
+                  }
+                </label>
                 <label>Bot quota<input type="number" min="0" max="32" [value]="modeBotQuota()" (input)="updateModeNumber('bots', $event)" /><small>0 disables bots; fill mode is configured automatically.</small></label>
                 <label>Bot difficulty<input type="number" min="0" max="5" [value]="modeBotDifficulty()" (input)="updateModeNumber('difficulty', $event)" /><small>0 easy · 5 maximum.</small></label>
                 @for (setting of preset.settings; track setting.key) {
@@ -260,6 +272,7 @@
               <button type="button" (click)="openLiveGroup('Movement & physics')"><span>↗</span><small>Movement</small><strong>{{ liveSummaryValue('movement') }}</strong><em>{{ livePolicyObserved('bhop') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
               <button type="button" (click)="openLiveGroup('Bots')"><span>BOT</span><small>Quota · difficulty</small><strong>{{ liveSummaryValue('bots') }}</strong><em>{{ isLiveSettingObserved('bot_quota') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
               <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>HUD</span><small>Player display</small><strong>{{ liveSummaryValue('hud') }}</strong><em>{{ livePolicyObserved('hud') ? 'Live from SharpTimer' : 'Saved fallback' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>CP</span><small>In-game practice</small><strong>{{ liveSummaryValue('practice') }}</strong><em>{{ activeModeProfile()?.presetId === 'kz' ? 'Managed inside CS2' : livePolicyObserved('practice') ? 'Live from SharpTimer' : 'Saved fallback' }}</em></button>
             </div>
           </section>
 
@@ -325,6 +338,22 @@
                   }
                 </div>
                 @if (!control.sharpTimerInstalled) { <small class="live-policy-note">Install SharpTimer under Modes & maps to enable this display.</small> }
+              </article>
+              <article [class.saved-state]="!livePolicyObserved('practice')">
+                @if (activeModeProfile()?.presetId === 'kz') {
+                  <div class="live-policy-heading"><span>KZ</span><div><strong>CS2KZ in-game practice</strong><small>The official KZ plugin owns timer, checkpoints and teleports.</small></div><b>NATIVE PLUGIN</b></div>
+                  <small class="live-policy-note">Use the CS2KZ player commands inside the game. The second-monitor panel continues to control the surrounding server rules, map and physics.</small>
+                } @else {
+                  <div class="live-policy-heading"><span>CP</span><div><strong>In-game timer practice</strong><small>Players set and use checkpoints inside CS2.</small></div><b [class.warning]="!livePolicyObserved('practice')">{{ activePracticeMode() === 'anywhere' ? 'AIR + SPEED' : activePracticeMode() === 'ground' ? 'GROUND' : 'TIMER ONLY' }} · {{ livePolicyObserved('practice') ? 'LIVE' : 'SAVED' }}</b></div>
+                  <div class="live-policy-options three" role="group" aria-label="In-game checkpoint policy">
+                    @for (action of policyActions('practice'); track action.id) {
+                      <button type="button" [class.selected]="(livePolicyObserved('practice') || !control.running) && isPolicyActionActive(action.id)" [disabled]="!control.running || !control.sharpTimerInstalled || liveAction() !== ''" (click)="runLiveAction(action)">
+                        <span>{{ liveAction() === action.id ? '…' : action.icon }}</span><strong>{{ action.label }}</strong>
+                      </button>
+                    }
+                  </div>
+                  <small class="live-policy-note">Player commands: <code>!cp</code> save · <code>!tp</code> teleport · <code>!prevcp</code>/<code>!nextcp</code> navigate · <code>!r</code> restart. No browser checkpoint data is created.</small>
+                }
               </article>
             </div>
           </section>

@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2QuickAction, Cs2RespawnMode, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
+import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2PracticeMode, Cs2QuickAction, Cs2RespawnMode, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -46,6 +46,7 @@ export class ServerDetailComponent implements OnDestroy {
   readonly modeAmmo = signal<Cs2AmmoMode>('standard');
   readonly modeHud = signal<Cs2HudMode>('hidden');
   readonly modeRespawn = signal<Cs2RespawnMode>('round');
+  readonly modePractice = signal<Cs2PracticeMode>('disabled');
   readonly modeInstallPackages = signal(true);
   readonly modeOverrides = signal<Record<string, string>>({});
   readonly modeSaving = signal(false);
@@ -338,10 +339,11 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.actions.filter(action => action.id.startsWith('combat-')) ?? [];
   }
 
-  policyActions(policy: 'bhop' | 'respawn' | 'hud'): Cs2QuickAction[] {
+  policyActions(policy: 'bhop' | 'respawn' | 'hud' | 'practice'): Cs2QuickAction[] {
     const ids = policy === 'bhop' ? ['enable-bhop', 'disable-bhop']
       : policy === 'respawn' ? ['respawn-round', 'respawn-instant']
-      : ['hud-hidden', 'hud-timer', 'hud-movement'];
+      : policy === 'hud' ? ['hud-hidden', 'hud-timer', 'hud-movement']
+      : ['practice-disabled', 'practice-ground', 'practice-anywhere'];
     return this.liveControl()?.actions.filter(action => ids.includes(action.id)) ?? [];
   }
 
@@ -363,12 +365,17 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.activeHudMode ?? this.activeModeProfile()?.hudMode ?? 'hidden';
   }
 
+  activePracticeMode(): Cs2PracticeMode {
+    return this.liveControl()?.activePracticeMode ?? this.activeModeProfile()?.practiceMode ?? 'disabled';
+  }
+
   isPolicyActionActive(actionId: string): boolean {
     return actionId === 'enable-bhop' ? this.activeBhopMode() === 'enabled'
       : actionId === 'disable-bhop' ? this.activeBhopMode() === 'disabled'
       : actionId === 'respawn-round' ? this.activeRespawnMode() === 'round'
       : actionId === 'respawn-instant' ? this.activeRespawnMode() === 'instant'
-      : actionId === `hud-${this.activeHudMode()}`;
+      : actionId.startsWith('hud-') ? actionId === `hud-${this.activeHudMode()}`
+      : actionId === `practice-${this.activePracticeMode()}`;
   }
 
   repairCombatAction(): Cs2QuickAction | null {
@@ -402,7 +409,7 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.actions.filter(action =>
       !action.id.startsWith('combat-') &&
       action.id !== 'repair-team-damage' &&
-      !['enable-bhop', 'disable-bhop', 'respawn-round', 'respawn-instant', 'hud-hidden', 'hud-timer', 'hud-movement'].includes(action.id)) ?? [];
+      !['enable-bhop', 'disable-bhop', 'respawn-round', 'respawn-instant', 'hud-hidden', 'hud-timer', 'hud-movement', 'practice-disabled', 'practice-ground', 'practice-anywhere'].includes(action.id)) ?? [];
   }
 
   updateLiveValue(key: string, event: Event): void {
@@ -495,7 +502,7 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.settings.filter(setting => this.liveSettingDiffersFromPreset(setting.key)).length ?? 0;
   }
 
-  liveSummaryValue(kind: 'map' | 'profile' | 'players' | 'bots' | 'combat' | 'respawn' | 'movement' | 'hud'): string {
+  liveSummaryValue(kind: 'map' | 'profile' | 'players' | 'bots' | 'combat' | 'respawn' | 'movement' | 'hud' | 'practice'): string {
     const values = this.liveObservedValues();
     if (kind === 'map') return this.server()?.currentMap || 'Not reported';
     if (kind === 'profile') return this.activeModeProfile()?.presetName || 'No profile';
@@ -504,6 +511,7 @@ export class ServerDetailComponent implements OnDestroy {
     if (kind === 'combat') return this.activeCombatMode() === 'ffa' ? 'Free for all' : this.activeCombatMode() === 'peaceful' ? 'Peaceful' : 'CT vs T';
     if (kind === 'respawn') return this.activeRespawnMode() === 'instant' ? 'Instant' : this.activeRespawnMode() === 'round' ? 'Round based' : 'Mixed';
     if (kind === 'movement') return this.activeBhopMode() === 'enabled' ? 'Auto-bhop on' : this.activeBhopMode() === 'disabled' ? 'Normal jumping' : 'Custom';
+    if (kind === 'practice') return this.activeModeProfile()?.presetId === 'kz' ? 'Native CS2KZ' : this.activePracticeMode() === 'anywhere' ? 'Air checkpoints' : this.activePracticeMode() === 'ground' ? 'Ground checkpoints' : 'Timer only';
     return this.activeHudMode() === 'hidden' ? 'Clean' : this.activeHudMode() === 'timer' ? 'Timer only' : 'Movement HUD';
   }
 
@@ -514,8 +522,9 @@ export class ServerDetailComponent implements OnDestroy {
     queueMicrotask(() => document.querySelector('.live-config-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
-  livePolicyObserved(policy: 'combat' | 'bhop' | 'respawn' | 'hud'): boolean {
+  livePolicyObserved(policy: 'combat' | 'bhop' | 'respawn' | 'hud' | 'practice'): boolean {
     if (policy === 'hud') return this.liveControl()?.hudLiveReadSucceeded ?? false;
+    if (policy === 'practice') return this.liveControl()?.practiceLiveReadSucceeded ?? false;
     const keys = policy === 'combat'
       ? ['mp_friendlyfire', 'mp_teammates_are_enemies', 'mp_damage_scale_ct_head', 'mp_damage_scale_ct_body', 'mp_damage_scale_t_head', 'mp_damage_scale_t_body', 'mp_damage_headshot_only']
       : policy === 'bhop'
@@ -648,6 +657,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeAmmo.set(preset.defaultAmmoMode);
     this.modeHud.set(preset.defaultHudMode);
     this.modeRespawn.set(preset.defaultRespawnMode);
+    this.modePractice.set(preset.defaultPracticeMode);
     this.modeOverrides.set(Object.fromEntries(
       preset.settings.filter(setting => setting.editable).map(setting => [setting.key, setting.defaultValue])
     ));
@@ -663,6 +673,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.modeAmmo.set(profile.ammoMode);
     this.modeHud.set(profile.hudMode);
     this.modeRespawn.set(profile.respawnMode);
+    this.modePractice.set(profile.practiceMode);
     this.modeOverrides.update(values => ({ ...values, ...profile.overrides }));
   }
 
@@ -696,6 +707,10 @@ export class ServerDetailComponent implements OnDestroy {
 
   updateModeRespawn(event: Event): void {
     this.modeRespawn.set((event.target as HTMLSelectElement).value as Cs2RespawnMode);
+  }
+
+  updateModePractice(event: Event): void {
+    this.modePractice.set((event.target as HTMLSelectElement).value as Cs2PracticeMode);
   }
 
   updateWorkshopQuery(event: Event): void {
@@ -779,7 +794,8 @@ export class ServerDetailComponent implements OnDestroy {
       combatMode: this.modeCombat(),
       ammoMode: this.modeAmmo(),
       hudMode: this.modeHud(),
-      respawnMode: this.modeRespawn()
+      respawnMode: this.modeRespawn(),
+      practiceMode: this.modePractice()
     }).pipe(finalize(() => {
       this.modeSaving.set(false);
       this.workshopAdding.set('');
@@ -985,6 +1001,7 @@ export class ServerDetailComponent implements OnDestroy {
           actionId === 'repair-team-damage' ||
           actionId.startsWith('respawn-') ||
           actionId.startsWith('hud-') ||
+          actionId.startsWith('practice-') ||
           actionId === 'enable-bhop' ||
           actionId === 'disable-bhop';
         const message = verifiedPolicy && result.output ? result.output : `${label} executed successfully.`;
@@ -1044,6 +1061,13 @@ export class ServerDetailComponent implements OnDestroy {
       const hudMode = actionId.slice(4) as Cs2HudMode;
       this.liveControl.update(control => control ? { ...control, activeHudMode: hudMode } : control);
       this.updateActiveProfilePolicy({ hudMode });
+      return;
+    }
+
+    if (actionId.startsWith('practice-')) {
+      const practiceMode = actionId.slice(9) as Cs2PracticeMode;
+      this.liveControl.update(control => control ? { ...control, activePracticeMode: practiceMode } : control);
+      this.updateActiveProfilePolicy({ practiceMode });
     }
   }
 
@@ -1054,7 +1078,7 @@ export class ServerDetailComponent implements OnDestroy {
     this.liveDirtyKeys.update(dirty => dirty.filter(key => !keys.has(key)));
   }
 
-  private updateActiveProfilePolicy(update: Partial<Pick<Cs2ModeProfile, 'combatMode' | 'respawnMode' | 'hudMode'>>): void {
+  private updateActiveProfilePolicy(update: Partial<Pick<Cs2ModeProfile, 'combatMode' | 'respawnMode' | 'hudMode' | 'practiceMode'>>): void {
     this.modeState.update(state => state ? {
       ...state,
       profiles: state.profiles.map(profile => profile.id === state.activeProfileId

@@ -10,6 +10,7 @@ public static partial class Cs2ModeCatalog
     public static IReadOnlyList<string> AmmoModes { get; } = ["standard", "infinite-magazine", "infinite-reserve"];
     public static IReadOnlyList<string> HudModes { get; } = ["hidden", "timer", "movement"];
     public static IReadOnlyList<string> RespawnModes { get; } = ["round", "instant"];
+    public static IReadOnlyList<string> PracticeModes { get; } = ["disabled", "ground", "anywhere"];
 
     public static IReadOnlyList<Cs2ModePresetDescriptor> Presets { get; } =
     [
@@ -39,7 +40,8 @@ public static partial class Cs2ModeCatalog
             "team",
             "standard",
             "hidden",
-            "round"),
+            "round",
+            "disabled"),
         new(
             "surf",
             "Surf",
@@ -70,7 +72,8 @@ public static partial class Cs2ModeCatalog
             "peaceful",
             "standard",
             "movement",
-            "instant"),
+            "instant",
+            "anywhere"),
         new(
             "kz",
             "KZ / Climb",
@@ -101,7 +104,8 @@ public static partial class Cs2ModeCatalog
             "peaceful",
             "standard",
             "movement",
-            "instant"),
+            "instant",
+            "disabled"),
         new(
             "bhop",
             "Bunny Hop",
@@ -132,7 +136,8 @@ public static partial class Cs2ModeCatalog
             "peaceful",
             "standard",
             "movement",
-            "instant"),
+            "instant",
+            "ground"),
         new(
             "scoutzknivez",
             "ScoutzKnivez",
@@ -163,7 +168,8 @@ public static partial class Cs2ModeCatalog
             "team",
             "standard",
             "hidden",
-            "instant"),
+            "instant",
+            "disabled"),
         new(
             "rpg-arena",
             "RPG Arena",
@@ -196,7 +202,8 @@ public static partial class Cs2ModeCatalog
             "team",
             "standard",
             "hidden",
-            "instant")
+            "instant",
+            "disabled")
     ];
 
     public static IReadOnlyList<Cs2ManagedPackageDescriptor> Packages { get; } =
@@ -304,6 +311,14 @@ public static partial class Cs2ModeCatalog
             : throw new ArgumentException("Respawn mode must be round or instant.");
     }
 
+    public static string ResolvePracticeMode(Cs2ModePresetDescriptor preset, string? value)
+    {
+        var candidate = string.IsNullOrWhiteSpace(value) ? preset.DefaultPracticeMode : value.Trim().ToLowerInvariant();
+        return PracticeModes.Contains(candidate, StringComparer.Ordinal)
+            ? candidate
+            : throw new ArgumentException("Practice mode must be disabled, ground or anywhere.");
+    }
+
     public static IReadOnlyDictionary<string, string> BuildRespawnConVars(string respawnMode)
     {
         if (!RespawnModes.Contains(respawnMode, StringComparer.Ordinal))
@@ -378,6 +393,33 @@ public static partial class Cs2ModeCatalog
             ["sharptimer_enable_map_tier_hud"] = timerVisible,
             ["sharptimer_enable_map_type_hud"] = timerVisible,
             ["sharptimer_enable_map_name_hud"] = timerVisible
+        };
+    }
+
+    public static IReadOnlyDictionary<string, string> BuildSharpTimerPracticeCommands(string practiceMode)
+    {
+        if (!PracticeModes.Contains(practiceMode, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("Practice mode must be disabled, ground or anywhere.");
+        }
+
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // Checkpoints and teleports remain player commands inside CS2. The admin panel only
+            // selects the policy that SharpTimer applies to the active map profile.
+            ["sharptimer_checkpoints_enabled"] = practiceMode == "disabled" ? "0" : "1",
+            ["sharptimer_remove_checkpoints_restrictions"] = practiceMode == "anywhere" ? "1" : "0",
+            ["sharptimer_checkpoints_only_when_timer_stopped"] = "0",
+            ["sharptimer_respawn_enabled"] = "1",
+            ["sharptimer_top_enabled"] = "1",
+            ["sharptimer_rank_enabled"] = "1",
+            ["sharptimer_stage_times_enabled"] = "1",
+            ["sharptimer_stage_sr_enabled"] = "1",
+            ["sharptimer_connect_commands_msg_enabled"] = "1",
+            // Replays are deliberately disabled for the small home-server hardware target.
+            ["sharptimer_replays_enabled"] = "0",
+            ["sharptimer_replay_bot_enabled"] = "0",
+            ["sharptimer_hud_updates_per_second"] = "16"
         };
     }
 

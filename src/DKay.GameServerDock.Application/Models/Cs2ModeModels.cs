@@ -23,7 +23,8 @@ public sealed record Cs2ModePresetDescriptor(
     string DefaultCombatMode,
     string DefaultAmmoMode,
     string DefaultHudMode,
-    string DefaultRespawnMode);
+    string DefaultRespawnMode,
+    string DefaultPracticeMode);
 
 public sealed record Cs2ManagedPackageDescriptor(
     string Id,
@@ -47,7 +48,8 @@ public sealed record ApplyCs2ModePresetRequest(
     string? CombatMode = null,
     string? AmmoMode = null,
     string? HudMode = null,
-    string? RespawnMode = null);
+    string? RespawnMode = null,
+    string? PracticeMode = null);
 
 public sealed record Cs2ModeProfile(
     string Id,
@@ -66,7 +68,8 @@ public sealed record Cs2ModeProfile(
     string? CombatMode = null,
     string? AmmoMode = null,
     string? HudMode = null,
-    string? RespawnMode = null);
+    string? RespawnMode = null,
+    string? PracticeMode = null);
 
 public sealed record Cs2WorkshopAccessState(
     bool Configured,

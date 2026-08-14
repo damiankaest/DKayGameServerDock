@@ -77,7 +77,7 @@ app.Use(async (context, next) =>
         return;
     }
 
-    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'";
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.steamusercontent.com https://*.steamstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
     context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";

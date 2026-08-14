@@ -53,6 +53,8 @@ public sealed class Cs2ModeServiceTests
             throw new NotSupportedException();
         public Task<Cs2ModeProfile> SetActiveHudModeAsync(GameServerInstance server, string hudMode, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Task<Cs2ModeProfile> SetActivePracticeModeAsync(GameServerInstance server, string practiceMode, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server) =>
             new(false, null, false, "not configured");
         public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key) =>

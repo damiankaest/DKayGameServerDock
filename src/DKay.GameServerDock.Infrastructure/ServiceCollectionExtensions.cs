@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<Cs2RuntimeProvisioner>());
         services.AddSingleton<Cs2RconClient>();
         services.AddSingleton<ICs2MapChangeScheduler, Cs2MapChangeScheduler>();
+        services.AddSingleton<ICs2CommunityStatsProvider, Cs2CommunityStatsProvider>();
         services.AddSingleton<Cs2Installer>();
         services.AddSingleton<ICs2ModeManager, Cs2ModeManager>();
         services.AddSingleton<IGameModule, PaperGameModule>();

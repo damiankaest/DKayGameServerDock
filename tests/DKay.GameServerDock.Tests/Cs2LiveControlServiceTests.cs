@@ -202,4 +202,24 @@ public sealed class Cs2LiveControlServiceTests
         Assert.True(resolved);
         Assert.Equal(expected, hudMode);
     }
+
+    [Theory]
+    [InlineData("0", "0", "disabled")]
+    [InlineData("1", "0", "ground")]
+    [InlineData("1", "1", "anywhere")]
+    public void Sharptimer_practice_status_is_derived_from_reported_plugin_values(
+        string checkpoints,
+        string unrestricted,
+        string expected)
+    {
+        var output = $"""
+            "sharptimer_checkpoints_enabled" = "{checkpoints}"
+            "sharptimer_remove_checkpoints_restrictions" = "{unrestricted}"
+            """;
+
+        var resolved = Cs2LiveControlService.TryResolveReportedPracticeMode(output, out var practiceMode);
+
+        Assert.True(resolved);
+        Assert.Equal(expected, practiceMode);
+    }
 }

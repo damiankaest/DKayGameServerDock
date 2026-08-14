@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using DKay.GameServerDock.Application.Abstractions;
 using DKay.GameServerDock.Application.Models;
 using DKay.GameServerDock.Domain;
@@ -149,7 +150,19 @@ public sealed class Cs2MapChangeScheduler(
 
             change.Status = "completed";
             change.Message = $"{change.Profile.MapName} is live. Its saved preset and live settings were applied.";
-            await RecordResultAsync(change, change.Message, token);
+            await events.RecordAsync(
+                ServerEvent.Create(
+                    change.Server.Id,
+                    ServerEventType.MapChanged,
+                    change.Message,
+                    clock.UtcNow,
+                    JsonSerializer.Serialize(new
+                    {
+                        profileId = change.Profile.Id,
+                        mapName = change.Profile.MapName,
+                        workshopId = change.Profile.WorkshopId
+                    })),
+                token);
             await Task.Delay(TimeSpan.FromSeconds(15), token);
             RemoveIfCurrent(change);
         }

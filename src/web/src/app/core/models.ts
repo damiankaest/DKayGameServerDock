@@ -91,7 +91,35 @@ export interface PublicServer {
   players: PublicPlayer[];
   mode: string | null;
   map: string | null;
+  maps: PublicMapStats[];
+  recordsAvailable: boolean;
+  recordsMessage: string;
   updatedAt: string;
+}
+
+export interface PublicMapRecord {
+  rank: number;
+  playerName: string;
+  timerTicks: number;
+  formattedTime: string;
+  completions: number;
+  achievedAt: string | null;
+}
+
+export interface PublicMapStats {
+  profileId: string;
+  mapName: string;
+  title: string;
+  workshopId: string | null;
+  previewUrl: string | null;
+  presetName: string;
+  workshopInstallState: 'local' | 'pending' | 'installed';
+  active: boolean;
+  playCount: number;
+  lastPlayedAt: string | null;
+  uniqueRunners: number;
+  totalCompletions: number;
+  records: PublicMapRecord[];
 }
 
 export interface PublicPlayer {
@@ -211,12 +239,14 @@ export interface Cs2ModePreset {
   defaultAmmoMode: Cs2AmmoMode;
   defaultHudMode: Cs2HudMode;
   defaultRespawnMode: Cs2RespawnMode;
+  defaultPracticeMode: Cs2PracticeMode;
 }
 
 export type Cs2CombatMode = 'peaceful' | 'team' | 'ffa';
 export type Cs2AmmoMode = 'standard' | 'infinite-magazine' | 'infinite-reserve';
 export type Cs2HudMode = 'hidden' | 'timer' | 'movement';
 export type Cs2RespawnMode = 'round' | 'instant';
+export type Cs2PracticeMode = 'disabled' | 'ground' | 'anywhere';
 
 export interface Cs2ManagedPackage {
   id: string;
@@ -250,6 +280,7 @@ export interface Cs2ModeProfile {
   ammoMode: Cs2AmmoMode;
   hudMode: Cs2HudMode;
   respawnMode: Cs2RespawnMode;
+  practiceMode: Cs2PracticeMode;
   overrides: Record<string, string>;
   recommendedPackageIds: string[];
   updatedAt: string;
@@ -310,6 +341,7 @@ export interface ApplyCs2ModePresetRequest {
   ammoMode: Cs2AmmoMode;
   hudMode: Cs2HudMode;
   respawnMode: Cs2RespawnMode;
+  practiceMode: Cs2PracticeMode;
 }
 
 export interface Cs2ModeApplyResult {
@@ -360,6 +392,8 @@ export interface Cs2LiveControlState {
   mapChange: Cs2MapChangeState;
   activeHudMode: Cs2HudMode;
   hudLiveReadSucceeded: boolean;
+  activePracticeMode: Cs2PracticeMode;
+  practiceLiveReadSucceeded: boolean;
   sharpTimerInstalled: boolean;
 }
 
