@@ -325,6 +325,115 @@
     0.7rem Consolas,
     monospace;
 }
+.basic-map-change {
+  margin-bottom: 14px;
+}
+.basic-map-change > header p:last-child {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.basic-map-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #0b1016;
+}
+.basic-map-search > span {
+  padding-left: 13px;
+  color: var(--green);
+  font-size: 1.05rem;
+}
+.basic-map-search input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.basic-map-search button {
+  margin: 4px;
+}
+.basic-map-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.basic-map-controls label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.basic-map-controls select {
+  min-width: 160px;
+}
+.basic-map-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+.basic-map-results {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  margin-top: 14px;
+  overflow: auto;
+}
+.basic-map-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #0d1219;
+}
+.basic-map-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.basic-map-row code {
+  overflow: hidden;
+  color: var(--green);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font:
+    0.72rem Consolas,
+    monospace;
+}
+.basic-map-row small {
+  color: var(--muted);
+  font-size: 0.6rem;
+}
+.basic-map-scheduled {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #0d1219;
+}
+.basic-map-scheduled > div {
+  display: grid;
+  gap: 4px;
+}
+.basic-map-scheduled strong {
+  color: var(--text);
+  font-size: 0.74rem;
+}
+.basic-map-scheduled small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
 
 @media (max-width: 760px) {
   .basic-select {

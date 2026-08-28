@@ -784,6 +784,46 @@ public sealed partial class Cs2LiveControlService(
             cancellationToken);
     }
 
+    public async Task<Cs2MapChangeState> ScheduleMapByMapAsync(
+        Guid serverId,
+        ScheduleCs2MapByMapRequest request,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        var snapshot = processes.GetSnapshot(server.Id);
+        if (server.Status != ServerStatus.Running || !snapshot.IsRunning)
+        {
+            throw new InvalidOperationException("Start the CS2 server before scheduling a map change.");
+        }
+
+        int[] allowedDelays = [0, 10, 30, 60, 120, 300];
+        if (!allowedDelays.Contains(request.DelaySeconds))
+        {
+            throw new InvalidOperationException("Choose a map-change delay of 0, 10, 30, 60, 120 or 300 seconds.");
+        }
+
+        // Register the searched map as a managed profile without requiring a stop. This writes the
+        // preset ConVars and mode document once; the running process is not disturbed until the
+        // scheduler actually changes the level.
+        var modeState = await modes.ApplyPresetAsync(
+            server,
+            new ApplyCs2ModePresetRequest(
+                request.PresetId,
+                request.MapName,
+                request.WorkshopId,
+                0,
+                1,
+                false,
+                new Dictionary<string, string>()),
+            cancellationToken);
+        var profile = modeState.Profiles.Single(item => item.Id == modeState.ActiveProfileId);
+        return await mapChanges.ScheduleAsync(
+            server,
+            profile,
+            TimeSpan.FromSeconds(request.DelaySeconds),
+            cancellationToken);
+    }
+
     public async Task<Cs2MapChangeState> CancelMapChangeAsync(
         Guid serverId,
         CancellationToken cancellationToken)

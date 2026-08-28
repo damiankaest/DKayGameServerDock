@@ -13,6 +13,7 @@ import {
   Cs2LiveControlState,
   Cs2LocalMapSearchResult,
   Cs2MapChangeState,
+  ScheduleCs2MapByMapRequest,
   Cs2ModeApplyResult,
   Cs2ModeCatalog,
   Cs2ModeState,
@@ -180,6 +181,10 @@ export class ApiService {
       profileId,
       delaySeconds,
     });
+  }
+
+  scheduleCs2MapByMap(id: string, request: ScheduleCs2MapByMapRequest): Observable<Cs2MapChangeState> {
+    return this.http.post<Cs2MapChangeState>(`/api/servers/${id}/cs2-control/map-change/by-map`, request);
   }
 
   cancelCs2MapChange(id: string): Observable<Cs2MapChangeState> {

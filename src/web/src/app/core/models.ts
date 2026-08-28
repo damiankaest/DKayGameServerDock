@@ -445,6 +445,13 @@ export interface Cs2MapChangeState {
   message: string;
 }
 
+export interface ScheduleCs2MapByMapRequest {
+  presetId: string;
+  mapName: string;
+  workshopId: string | null;
+  delaySeconds: number;
+}
+
 export interface Cs2LiveConfigurationApplyResult {
   values: Record<string, string>;
   appliedLive: boolean;

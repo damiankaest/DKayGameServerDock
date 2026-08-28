@@ -227,6 +227,126 @@
       </section>
     }
 
+    @if (server.templateId === 'counter-strike-2') {
+      <section class="basic-config panel basic-map-change">
+        <header>
+          <div>
+            <p class="eyebrow">MAP-WECHSEL</p>
+            <h2>Map suchen und einreihen</h2>
+            <p>
+              Workshop- oder lokale Map suchen und mit Countdown als nächsten Map-Wechsel
+              einreihen. Funktioniert nur bei laufendem Server.
+            </p>
+          </div>
+          <span
+            class="status"
+            [attr.data-status]="server.process.isRunning ? 'Running' : 'Stopped'"
+            >{{ server.process.isRunning ? 'LIVE' : 'GESTOPPT' }}</span
+          >
+        </header>
+
+        <form class="basic-map-search" (submit)="$event.preventDefault(); searchMaps()">
+          <span>⌕</span>
+          <input
+            maxlength="64"
+            placeholder="z. B. kz, fy, awp, aim oder surf beginner"
+            [value]="mapQuery()"
+            (input)="updateMapQuery($event)"
+          />
+          <button
+            class="primary-button"
+            type="submit"
+            [disabled]="mapSearching() || mapQuery().trim().length < 2"
+          >
+            {{ mapSearching() ? 'Suche…' : 'Maps suchen' }}
+          </button>
+        </form>
+
+        <div class="basic-map-controls">
+          <label>
+            <span>Verzögerung</span>
+            <select [value]="mapChangeDelay()" (change)="updateMapChangeDelay($event)">
+              <option [value]="0">Sofort</option>
+              <option [value]="10">10 Sekunden</option>
+              <option [value]="30">30 Sekunden</option>
+              <option [value]="60">1 Minute</option>
+              <option [value]="120">2 Minuten</option>
+              <option [value]="300">5 Minuten</option>
+            </select>
+          </label>
+        </div>
+
+        @if (mapSearching()) {
+          <p class="basic-map-note">Suche läuft…</p>
+        } @else if (localMapResults().length || workshopResults().length) {
+          <div class="basic-map-results">
+            @for (map of localMapResults(); track map.mapName) {
+              <div class="basic-map-row">
+                <div>
+                  <code>{{ map.mapName }}</code>
+                  <small>Lokal · {{ presetName(map.presetId) }}</small>
+                </div>
+                <button
+                  class="secondary-button small"
+                  type="button"
+                  [disabled]="!server.process.isRunning || mapQueueing() !== ''"
+                  (click)="queueMap(map.mapName, null, map.presetId)"
+                >
+                  {{ mapQueueing() === map.mapName ? 'Reihe ein…' : 'Einreihen' }}
+                </button>
+              </div>
+            }
+            @for (map of workshopResults(); track map.publishedFileId) {
+              <div class="basic-map-row">
+                <div>
+                  <code>{{ map.mapName }}</code>
+                  <small>Workshop · {{ presetName(inferPreset(map.mapName)) }}</small>
+                </div>
+                <button
+                  class="secondary-button small"
+                  type="button"
+                  [disabled]="!server.process.isRunning || mapQueueing() !== ''"
+                  (click)="queueMap(map.mapName, map.publishedFileId, inferPreset(map.mapName))"
+                >
+                  {{ mapQueueing() === map.mapName ? 'Reihe ein…' : 'Einreihen' }}
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="basic-map-note">
+            Noch nichts gesucht. Mindestens 2 Zeichen eingeben und „Maps suchen" drücken.
+          </p>
+        }
+
+        @if (mapMessage()) {
+          <p class="basic-map-note">{{ mapMessage() }}</p>
+        }
+
+        @if (mapChangeState(); as state) {
+          <div class="basic-map-scheduled">
+            <div>
+              <span
+                class="status"
+                [attr.data-status]="state.status === 'failed' ? 'Error' : 'Running'"
+                >{{ state.status }}</span
+              >
+              <strong>{{ state.mapName ?? 'Kein Map-Wechsel' }}</strong>
+              <small
+                >{{ state.message }}@if (state.status === 'scheduled' && state.remainingSeconds > 0)
+                  { · noch {{ state.remainingSeconds }}s }</small
+              >
+            </div>
+            @if (state.status === 'scheduled' || state.status === 'changing') {
+              <button class="danger-button small" type="button" (click)="cancelMapChange()">
+                Abbrechen
+              </button>
+            }
+          </div>
+        }
+      </section>
+    }
+
     <section class="basic-console panel">
       <header>
         <div>

@@ -93,6 +93,12 @@ public static class ServerEndpoints
                 Cs2LiveControlService controls,
                 CancellationToken token) =>
             Results.Ok(await controls.ScheduleMapChangeAsync(id, request, token)));
+        group.MapPost("/{id:guid}/cs2-control/map-change/by-map", async (
+                Guid id,
+                ScheduleCs2MapByMapRequest request,
+                Cs2LiveControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.ScheduleMapByMapAsync(id, request, token)));
         group.MapDelete("/{id:guid}/cs2-control/map-change", async (
                 Guid id,
                 Cs2LiveControlService controls,

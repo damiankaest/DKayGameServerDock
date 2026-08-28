@@ -1,7 +1,7 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { finalize } from 'rxjs';
+import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2BasicConfiguration, GameServer } from '../../core/models';
+import { ConsoleCommandResult, Cs2BasicConfiguration, Cs2LocalMap, Cs2MapChangeState, Cs2ModeCatalog, Cs2WorkshopMap, GameServer } from '../../core/models';
 
 interface CommandEntry {
   command: string;
@@ -38,11 +38,24 @@ export class BasicControlComponent {
   readonly basicConfiguration = signal<Cs2BasicConfiguration | null>(null);
   readonly configSaving = signal(false);
   readonly configMessage = signal('');
+  readonly modeCatalog = signal<Cs2ModeCatalog | null>(null);
+  readonly mapQuery = signal('');
+  readonly localMapResults = signal<Cs2LocalMap[]>([]);
+  readonly workshopResults = signal<Cs2WorkshopMap[]>([]);
+  readonly mapSearching = signal(false);
+  readonly mapQueueing = signal('');
+  readonly mapChangeDelay = signal(30);
+  readonly mapChangeState = signal<Cs2MapChangeState | null>(null);
+  readonly mapMessage = signal('');
   readonly error = signal('');
 
   constructor() {
+    this.loadModeCatalog();
     this.loadServers();
-    this.refreshHandle = setInterval(() => this.refreshSelectedServer(true), 3000);
+    this.refreshHandle = setInterval(() => {
+      this.refreshSelectedServer(true);
+      this.loadMapChangeState();
+    }, 3000);
     this.destroyRef.onDestroy(() => {
       if (this.refreshHandle !== null) clearInterval(this.refreshHandle);
     });
@@ -54,9 +67,15 @@ export class BasicControlComponent {
     this.commandHistory.set([]);
     this.basicConfiguration.set(null);
     this.configMessage.set('');
+    this.mapQuery.set('');
+    this.localMapResults.set([]);
+    this.workshopResults.set([]);
+    this.mapMessage.set('');
+    this.mapChangeState.set(null);
     this.error.set('');
     this.refreshSelectedServer();
     this.loadBasicConfiguration(serverId);
+    this.loadMapChangeState();
   }
 
   updateImportText(key: 'name' | 'directory', event: Event): void {
@@ -218,6 +237,118 @@ export class BasicControlComponent {
             error.error?.detail ?? 'Basic-Konfiguration konnte nicht gespeichert werden.',
           ),
       });
+  }
+
+  updateMapQuery(event: Event): void {
+    this.mapQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  updateMapChangeDelay(event: Event): void {
+    this.mapChangeDelay.set(Number((event.target as HTMLSelectElement).value));
+  }
+
+  searchMaps(): void {
+    const server = this.selectedServer();
+    const query = this.mapQuery().trim();
+    if (!server || server.templateId !== 'counter-strike-2' || query.length < 2) return;
+
+    this.error.set('');
+    this.mapMessage.set('');
+    this.mapSearching.set(true);
+    forkJoin({
+      local: this.api.searchCs2LocalMaps(server.id, query),
+      workshop: this.api.searchCs2Workshop(server.id, query).pipe(catchError(() => of(null))),
+    })
+      .pipe(finalize(() => this.mapSearching.set(false)))
+      .subscribe({
+        next: (result) => {
+          this.localMapResults.set(result.local.items);
+          this.workshopResults.set(result.workshop?.items ?? []);
+          if (!result.workshop) {
+            this.mapMessage.set('Workshop-Suche übersprungen (Web-API-Key fehlt oder Fehler).');
+          }
+        },
+        error: () => this.error.set('Map-Suche fehlgeschlagen.'),
+      });
+  }
+
+  inferPreset(mapName: string): string | null {
+    const normalized = mapName.trim().toLowerCase();
+    if (!normalized) return null;
+    return (
+      this.modeCatalog()?.presets.find((preset) =>
+        preset.mapPrefixes.some((prefix) => normalized.startsWith(prefix.toLowerCase())),
+      )?.id ?? null
+    );
+  }
+
+  presetName(presetId: string | null): string {
+    if (!presetId) return 'Kein Preset erkannt';
+    return this.modeCatalog()?.presets.find((preset) => preset.id === presetId)?.name ?? presetId;
+  }
+
+  queueMap(mapName: string, workshopId: string | null, presetId: string | null): void {
+    const server = this.selectedServer();
+    if (!server || this.mapQueueing()) return;
+
+    const preset = presetId ?? this.inferPreset(mapName) ?? 'classic';
+    this.error.set('');
+    this.mapQueueing.set(mapName);
+    this.api
+      .scheduleCs2MapByMap(server.id, {
+        presetId: preset,
+        mapName,
+        workshopId,
+        delaySeconds: this.mapChangeDelay(),
+      })
+      .pipe(finalize(() => this.mapQueueing.set('')))
+      .subscribe({
+        next: (state) => {
+          this.mapChangeState.set(state);
+          this.mapMessage.set(state.message);
+        },
+        error: (error) =>
+          this.error.set(error.error?.detail ?? 'Map konnte nicht eingereiht werden.'),
+      });
+  }
+
+  cancelMapChange(): void {
+    const server = this.selectedServer();
+    if (!server) return;
+
+    this.error.set('');
+    this.api.cancelCs2MapChange(server.id).subscribe({
+      next: (state) => {
+        this.mapChangeState.set(state);
+        this.mapMessage.set(state.message);
+      },
+      error: (error) =>
+        this.error.set(error.error?.detail ?? 'Map-Wechsel konnte nicht abgebrochen werden.'),
+    });
+  }
+
+  private loadModeCatalog(): void {
+    this.api.cs2ModeCatalog().subscribe({
+      next: (catalog) => this.modeCatalog.set(catalog),
+      error: () => {
+        // The catalog only powers preset names and prefix inference.
+      },
+    });
+  }
+
+  private loadMapChangeState(): void {
+    const server = this.selectedServer();
+    if (!server || server.templateId !== 'counter-strike-2') {
+      this.mapChangeState.set(null);
+      return;
+    }
+
+    this.api.cs2MapChange(server.id).subscribe({
+      next: (state) => this.mapChangeState.set(state),
+      error: () => {
+        // Best effort: the map-change state is optional context for the operator.
+      },
+    });
   }
 
   private loadServers(): void {
