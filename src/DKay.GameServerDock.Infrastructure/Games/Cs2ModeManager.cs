@@ -1128,7 +1128,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
             line.TrimStart().StartsWith("// DKay managed", StringComparison.OrdinalIgnoreCase) ||
             Regex.IsMatch(
                 line,
-                "^\\s*exec(?:ifexists)?\\s+\"?(?:cfg/)?dkay-(?:combat|live)\\.cfg\"?\\s*(?://.*)?$",
+                "^\\s*exec(?:ifexists)?\\s+\"?(?:cfg/)?dkay-(?:combat|live|basic)\\.cfg\"?\\s*(?://.*)?$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
 
         while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))

@@ -250,12 +250,16 @@ public sealed class Cs2ModeCatalogTests
             Assert.Contains("sv_staminamax 0", customExec);
             Assert.Equal(1, customExec.Split("exec dkay-combat.cfg", StringSplitOptions.None).Length - 1);
             Assert.Equal(1, customExec.Split("exec dkay-live.cfg", StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, customExec.Split("exec dkay-basic.cfg", StringSplitOptions.None).Length - 1);
 
             var mapExec = await File.ReadAllTextAsync(mapExecPath);
             Assert.Contains("sv_airaccelerate 1000", mapExec);
-            Assert.EndsWith("exec dkay-combat.cfg\nexec dkay-live.cfg\n", mapExec.Replace("\r\n", "\n", StringComparison.Ordinal));
+            Assert.EndsWith(
+                "exec dkay-combat.cfg\nexec dkay-live.cfg\nexec dkay-basic.cfg\n",
+                mapExec.Replace("\r\n", "\n", StringComparison.Ordinal));
             Assert.Equal(1, mapExec.Split("exec dkay-combat.cfg", StringSplitOptions.None).Length - 1);
             Assert.Equal(1, mapExec.Split("exec dkay-live.cfg", StringSplitOptions.None).Length - 1);
+            Assert.Equal(1, mapExec.Split("exec dkay-basic.cfg", StringSplitOptions.None).Length - 1);
         }
         finally
         {
