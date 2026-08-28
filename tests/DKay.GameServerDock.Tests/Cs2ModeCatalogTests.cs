@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using DKay.GameServerDock.Application.Models;
 using DKay.GameServerDock.Domain;
 using DKay.GameServerDock.Infrastructure;
@@ -531,6 +532,197 @@ public sealed class Cs2ModeCatalogTests
         finally
         {
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Reconcile_disables_metamod_plugins_outside_the_active_profile_and_reenables_on_switch()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-reconcile-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            WritePackageMarker(root, "cs2kz", metamodVdf: null);
+            WritePackageMarker(root, "movement-unlocker", metamodVdf: null);
+            WritePackageMarker(root, "counterstrikesharp", metamodVdf: null);
+            WriteMetamodVdf(root, "cs2kz.vdf", disabled: false);
+            WriteMetamodVdf(root, "movementunlocker.vdf", disabled: false);
+            WriteMetamodVdf(root, "counterstrikesharp.vdf", disabled: false);
+
+            using var httpClient = new HttpClient();
+            var manager = new Cs2ModeManager(httpClient);
+
+            // fy_poolparty matches the rpg-arena preset, which keeps CounterStrikeSharp but not CS2KZ.
+            await manager.ApplyPresetAsync(
+                server,
+                new ApplyCs2ModePresetRequest("rpg-arena", "fy_poolparty", null, 0, 1, false, new Dictionary<string, string>()),
+                CancellationToken.None);
+
+            Assert.True(File.Exists(MetamodPath(root, "cs2kz.vdf.disabled")));
+            Assert.False(File.Exists(MetamodPath(root, "cs2kz.vdf")));
+            Assert.True(File.Exists(MetamodPath(root, "movementunlocker.vdf.disabled")));
+            Assert.True(File.Exists(MetamodPath(root, "counterstrikesharp.vdf")));
+
+            var rpgState = await manager.GetStateAsync(server, CancellationToken.None);
+            Assert.True(rpgState.Packages.Single(p => p.Id == "cs2kz").Installed);
+            Assert.False(rpgState.Packages.Single(p => p.Id == "cs2kz").Enabled);
+            Assert.False(rpgState.Packages.Single(p => p.Id == "movement-unlocker").Enabled);
+            Assert.True(rpgState.Packages.Single(p => p.Id == "counterstrikesharp").Enabled);
+
+            // Switching to KZ re-enables CS2KZ and disables CounterStrikeSharp (not in the KZ stack).
+            await manager.ApplyPresetAsync(
+                server,
+                new ApplyCs2ModePresetRequest("kz", "kz_test", null, 0, 1, false, new Dictionary<string, string>()),
+                CancellationToken.None);
+
+            Assert.True(File.Exists(MetamodPath(root, "cs2kz.vdf")));
+            Assert.False(File.Exists(MetamodPath(root, "cs2kz.vdf.disabled")));
+            Assert.True(File.Exists(MetamodPath(root, "counterstrikesharp.vdf.disabled")));
+            Assert.True(File.Exists(MetamodPath(root, "movementunlocker.vdf.disabled")));
+
+            // Reconciliation is idempotent: repeated runs leave the same on-disk state.
+            manager.ReconcileEnabledPlugins(server);
+            manager.ReconcileEnabledPlugins(server);
+            Assert.True(File.Exists(MetamodPath(root, "cs2kz.vdf")));
+            Assert.False(File.Exists(MetamodPath(root, "cs2kz.vdf.disabled")));
+            Assert.True(File.Exists(MetamodPath(root, "counterstrikesharp.vdf.disabled")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Reconcile_respects_recorded_metamod_vdf_name_for_case_or_upstream_renames()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-reconcile-recorded-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        try
+        {
+            // The marker records the exact on-disk name, which differs in case from the catalog hint.
+            WritePackageMarker(root, "cs2kz", metamodVdf: "CS2KZ.VDF");
+            WriteMetamodVdf(root, "CS2KZ.VDF", disabled: false);
+
+            using var httpClient = new HttpClient();
+            var manager = new Cs2ModeManager(httpClient);
+
+            await manager.ApplyPresetAsync(
+                server,
+                new ApplyCs2ModePresetRequest("rpg-arena", "fy_poolparty", null, 0, 1, false, new Dictionary<string, string>()),
+                CancellationToken.None);
+
+            Assert.False(File.Exists(MetamodPath(root, "CS2KZ.VDF")));
+            Assert.True(File.Exists(MetamodPath(root, "CS2KZ.VDF.disabled")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallPackage_records_the_deployed_metamod_vdf_name()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-install-vdf-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        var markerRoot = Path.Combine(root, "game", "csgo", "addons", ".dkay");
+        Directory.CreateDirectory(markerRoot);
+        await File.WriteAllTextAsync(
+            Path.Combine(markerRoot, "metamod-source.json"),
+            "{\"installed\":true,\"version\":\"test\",\"installedAt\":\"2026-01-01T00:00:00Z\"}");
+
+        try
+        {
+            using var httpClient = new HttpClient(new MovementUnlockerReleaseHandler(CreateMetamodPluginArchive("movementunlocker.vdf")));
+            var manager = new Cs2ModeManager(httpClient);
+
+            await manager.InstallPackageAsync(
+                server,
+                "movement-unlocker",
+                (_, _) => Task.CompletedTask,
+                CancellationToken.None);
+
+            Assert.True(File.Exists(MetamodPath(root, "movementunlocker.vdf")));
+
+            using var marker = JsonDocument.Parse(await File.ReadAllTextAsync(
+                Path.Combine(markerRoot, "movement-unlocker.json")));
+            Assert.Equal("movementunlocker.vdf", marker.RootElement.GetProperty("metamodVdf").GetString());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static string MetamodPath(string root, string fileName) =>
+        Path.Combine(root, "game", "csgo", "addons", "metamod", fileName);
+
+    private static void WritePackageMarker(string root, string packageId, string? metamodVdf)
+    {
+        var markerRoot = Path.Combine(root, "game", "csgo", "addons", ".dkay");
+        Directory.CreateDirectory(markerRoot);
+        var json = metamodVdf is null
+            ? "{\"installed\":true,\"version\":\"test\",\"installedAt\":\"2026-01-01T00:00:00Z\"}"
+            : $"{{\"installed\":true,\"version\":\"test\",\"installedAt\":\"2026-01-01T00:00:00Z\",\"metamodVdf\":\"{metamodVdf}\"}}";
+        File.WriteAllText(Path.Combine(markerRoot, $"{packageId}.json"), json);
+    }
+
+    private static void WriteMetamodVdf(string root, string fileName, bool disabled)
+    {
+        var metamodRoot = Path.Combine(root, "game", "csgo", "addons", "metamod");
+        Directory.CreateDirectory(metamodRoot);
+        File.WriteAllText(Path.Combine(metamodRoot, fileName + (disabled ? ".disabled" : string.Empty)), "test");
+    }
+
+    private static byte[] CreateMetamodPluginArchive(string vdfFileName)
+    {
+        using var output = new MemoryStream();
+        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var vdf = archive.CreateEntry($"addons/metamod/{vdfFileName}");
+            using (var writer = new StreamWriter(vdf.Open(), Encoding.UTF8))
+            {
+                writer.Write("\"Metamod Plugin\" { \"file\" \"addons/movementunlocker/bin/win64/movementunlocker\" }");
+            }
+
+            var binary = archive.CreateEntry("addons/movementunlocker/bin/win64/movementunlocker.dll");
+            using (var writer = new StreamWriter(binary.Open(), Encoding.UTF8))
+            {
+                writer.Write("test-plugin");
+            }
+        }
+
+        return output.ToArray();
+    }
+
+    private sealed class MovementUnlockerReleaseHandler(byte[] archive) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            HttpResponseMessage response;
+            if (request.RequestUri?.Host == "api.github.com")
+            {
+                response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"tag_name\":\"build-test\",\"assets\":[{\"name\":\"MovementUnlocker-windows-linux.zip\",\"browser_download_url\":\"https://github.com/Source2ZE/MovementUnlocker/releases/download/build-test/MovementUnlocker-windows-linux.zip\"}]}",
+                        Encoding.UTF8,
+                        "application/json")
+                };
+            }
+            else
+            {
+                response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(archive)
+                };
+            }
+
+            response.RequestMessage = request;
+            return Task.FromResult(response);
         }
     }
 

@@ -42,6 +42,14 @@ public interface ICs2ModeManager
         int take,
         CancellationToken cancellationToken);
     Task RepairAfterGameUpdateAsync(GameServerInstance server, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Aligns the on-disk Metamod autoload state with the active map profile. An installed Metamod
+    /// plugin is enabled exactly when the active profile still recommends it, so a profile switch
+    /// or server restart cannot resurrect plugins from a previously applied preset. Idempotent.
+    /// </summary>
+    void ReconcileEnabledPlugins(GameServerInstance server);
+
     IReadOnlyList<string> ResolveAutomaticInstallOrder(IEnumerable<string> packageIds);
     Task InstallPackageAsync(
         GameServerInstance server,

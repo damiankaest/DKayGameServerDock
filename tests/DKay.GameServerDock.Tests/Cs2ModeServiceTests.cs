@@ -62,6 +62,10 @@ public sealed class Cs2ModeServiceTests
         public Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(GameServerInstance server, string query, int take, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task RepairAfterGameUpdateAsync(GameServerInstance server, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ReconcileEnabledPlugins(GameServerInstance server)
+        {
+        }
+
         public IReadOnlyList<string> ResolveAutomaticInstallOrder(IEnumerable<string> packageIds) => packageIds.ToArray();
         public Task InstallPackageAsync(
             GameServerInstance server,

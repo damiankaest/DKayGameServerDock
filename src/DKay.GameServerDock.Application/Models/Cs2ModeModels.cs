@@ -35,7 +35,8 @@ public sealed record Cs2ManagedPackageDescriptor(
     string ProjectUrl,
     bool AutomaticInstall,
     bool Experimental,
-    IReadOnlyList<string> DependencyIds);
+    IReadOnlyList<string> DependencyIds,
+    string? MetamodPluginVdf = null);
 
 public sealed record ApplyCs2ModePresetRequest(
     string PresetId,
@@ -109,6 +110,7 @@ public sealed record Cs2ManagedPackageState(
     bool AutomaticInstall,
     bool Experimental,
     bool Installed,
+    bool Enabled,
     string? InstalledVersion,
     DateTimeOffset? InstalledAt,
     IReadOnlyList<string> DependencyIds);

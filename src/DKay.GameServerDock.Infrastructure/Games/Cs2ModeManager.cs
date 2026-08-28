@@ -135,6 +135,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
         var profiles = document.Profiles.Where(item => item.Id != profile.Id).Append(profile).OrderBy(item => item.MapName).ToArray();
         document = new ModeDocument(profile.Id, profiles);
         await WriteJsonAtomicallyAsync(GetModeDocumentPath(server), document, cancellationToken);
+        ReconcileEnabledPlugins(server);
         return BuildState(server, document);
     }
 
@@ -177,6 +178,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
             GetModeDocumentPath(server),
             document with { ActiveProfileId = profile.Id, Profiles = profiles },
             cancellationToken);
+        ReconcileEnabledPlugins(server);
         return profile;
     }
 
@@ -462,7 +464,13 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                 await PatchGameInfoAsync(server, cancellationToken);
             }
 
-            await WritePackageMarkerAsync(server, new PackageMarker(true, download.Version, DateTimeOffset.UtcNow), packageId, cancellationToken);
+            var existingMarker = ReadPackageMarker(server, packageId);
+            var metamodVdf = GetMetamodVdfBaseName(server, package, existingMarker);
+            await WritePackageMarkerAsync(
+                server,
+                new PackageMarker(true, download.Version, DateTimeOffset.UtcNow, metamodVdf),
+                packageId,
+                cancellationToken);
             if (packageId == "sharp-timer" && GetActiveProfile(server) is { } activeProfile)
             {
                 var activePreset = Presets.Single(item => item.Id == activeProfile.PresetId);
@@ -487,6 +495,37 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                     // Best-effort cleanup; the OS temp cleaner can remove a locked directory later.
                 }
             }
+        }
+    }
+
+    public void ReconcileEnabledPlugins(GameServerInstance server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        var activeProfile = GetActiveProfile(server);
+        if (activeProfile is null)
+        {
+            // Without an active map profile there is no desired plugin set to enforce. Leave
+            // manually installed packages untouched instead of disabling them by default.
+            return;
+        }
+
+        var desired = new HashSet<string>(activeProfile.RecommendedPackageIds, StringComparer.Ordinal);
+
+        foreach (var package in Packages)
+        {
+            var marker = ReadPackageMarker(server, package.Id);
+            if (!marker.Installed)
+            {
+                continue;
+            }
+
+            var vdfBaseName = GetMetamodVdfBaseName(server, package, marker);
+            if (string.IsNullOrWhiteSpace(vdfBaseName))
+            {
+                continue;
+            }
+
+            SetMetamodVdfActive(server, vdfBaseName, desired.Contains(package.Id));
         }
     }
 
@@ -516,6 +555,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
                 package.AutomaticInstall,
                 package.Experimental,
                 marker.Installed,
+                IsPackageEnabled(server, package, marker),
                 marker.Version,
                 marker.InstalledAt,
                 package.DependencyIds);
@@ -1243,6 +1283,113 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
     private static string GetPackageMarkerPath(GameServerInstance server, string packageId) =>
         Path.Combine(GetCsgoRoot(server), "addons", ".dkay", $"{packageId}.json");
 
+    private static string GetMetamodRoot(GameServerInstance server) =>
+        Path.Combine(GetCsgoRoot(server), "addons", "metamod");
+
+    private static bool IsPackageEnabled(
+        GameServerInstance server,
+        Cs2ManagedPackageDescriptor package,
+        PackageMarker marker)
+    {
+        if (!marker.Installed)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(package.MetamodPluginVdf))
+        {
+            // Not loaded by Metamod; enabled whenever it is installed.
+            return true;
+        }
+
+        var vdfBaseName = GetMetamodVdfBaseName(server, package, marker);
+        return !string.IsNullOrWhiteSpace(vdfBaseName) && IsMetamodVdfActive(server, vdfBaseName);
+    }
+
+    private static string? GetMetamodVdfBaseName(
+        GameServerInstance server,
+        Cs2ManagedPackageDescriptor package,
+        PackageMarker marker)
+    {
+        if (string.IsNullOrWhiteSpace(package.MetamodPluginVdf))
+        {
+            return null;
+        }
+
+        var metamodRoot = GetMetamodRoot(server);
+        if (!Directory.Exists(metamodRoot))
+        {
+            return null;
+        }
+
+        string[] candidates;
+        try
+        {
+            candidates = Directory.EnumerateFiles(metamodRoot, "*.vdf*", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .ToArray();
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        // A recorded exact name from installation wins, so upstream renames or case differences
+        // cannot detach an installed plugin from its autoload entry.
+        if (!string.IsNullOrWhiteSpace(marker.MetamodVdf) &&
+            candidates.Any(fileName => BaseVdfName(fileName).Equals(marker.MetamodVdf, StringComparison.OrdinalIgnoreCase)))
+        {
+            return marker.MetamodVdf;
+        }
+
+        // Migration fallback: match the catalog name case-insensitively against either the active
+        // or disabled autoload file.
+        return candidates
+            .Select(BaseVdfName)
+            .FirstOrDefault(baseName => string.Equals(baseName, package.MetamodPluginVdf, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string BaseVdfName(string fileName) =>
+        fileName.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase)
+            ? fileName[..^".disabled".Length]
+            : fileName;
+
+    private static bool IsMetamodVdfActive(GameServerInstance server, string vdfBaseName) =>
+        File.Exists(Path.Combine(GetMetamodRoot(server), vdfBaseName));
+
+    private static void SetMetamodVdfActive(GameServerInstance server, string vdfBaseName, bool active)
+    {
+        var activePath = Path.Combine(GetMetamodRoot(server), vdfBaseName);
+        var disabledPath = activePath + ".disabled";
+        var activeExists = File.Exists(activePath);
+        var disabledExists = File.Exists(disabledPath);
+
+        if (active)
+        {
+            if (!activeExists && disabledExists)
+            {
+                File.Move(disabledPath, activePath);
+            }
+
+            return;
+        }
+
+        if (activeExists)
+        {
+            if (disabledExists)
+            {
+                File.Delete(disabledPath);
+            }
+
+            File.Move(activePath, disabledPath);
+        }
+    }
+
     private static async Task WriteAllLinesAtomicallyAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -1264,7 +1411,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
     }
 
     private sealed record ModeDocument(string? ActiveProfileId, IReadOnlyList<Cs2ModeProfile> Profiles);
-    private sealed record PackageMarker(bool Installed, string? Version, DateTimeOffset? InstalledAt);
+    private sealed record PackageMarker(bool Installed, string? Version, DateTimeOffset? InstalledAt, string? MetamodVdf = null);
     private sealed record PackageSource(PackageSourceKind Kind, string? Repository);
     private sealed record PackageDownload(Uri Url, string Version);
     private sealed record PackageDeployment(string SourceRoot, string DestinationRoot);

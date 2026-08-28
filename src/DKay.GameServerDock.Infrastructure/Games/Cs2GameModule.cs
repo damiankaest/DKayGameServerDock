@@ -39,6 +39,9 @@ public sealed class Cs2GameModule(
     {
         runtime.Prepare(server);
         basicConfig.Prepare(server);
+        // Enforce the active profile's Metamod plugin set before every start so a restart cannot
+        // resurrect plugins left behind by a previously applied preset.
+        modes.ReconcileEnabledPlugins(server);
         var settings = GameSettings.Read(server);
         var activeProfile = modes.GetActiveProfile(server);
         var executable = OperatingSystem.IsWindows()

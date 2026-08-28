@@ -209,12 +209,12 @@ public static partial class Cs2ModeCatalog
     public static IReadOnlyList<Cs2ManagedPackageDescriptor> Packages { get; } =
     [
         new("metamod-source", "Metamod:Source", "Framework", "Native Source 2 plugin loader.", "AlliedModders", "https://github.com/alliedmodders/metamod-source", true, false, []),
-        new("counterstrikesharp", "CounterStrikeSharp", "Framework", "Managed C# plugin framework for CS2.", "roflmuffin", "https://github.com/roflmuffin/CounterStrikeSharp", true, false, ["metamod-source"]),
+        new("counterstrikesharp", "CounterStrikeSharp", "Framework", "Managed C# plugin framework for CS2.", "roflmuffin", "https://github.com/roflmuffin/CounterStrikeSharp", true, false, ["metamod-source"], "counterstrikesharp.vdf"),
         new("cs2-tags", "CS2-Tags", "Dependency", "Required player-tag provider for the managed SharpTimer fork.", "daffyyyy", "https://github.com/daffyyyy/CS2-Tags", true, false, ["counterstrikesharp"]),
-        new("movement-unlocker", "Movement Unlocker", "Movement", "Removes ground speed limits for Source-style movement modes.", "Source2ZE", "https://github.com/Source2ZE/MovementUnlocker", true, false, ["metamod-source"]),
-        new("rampbug-fix", "RampBugFix", "Movement", "Mitigates common CS2 surf ramp bugs; upstream notes that no fix is perfect.", "Interesting-exe", "https://github.com/Interesting-exe/CS2Fixes-RampbugFix", true, true, ["metamod-source"]),
+        new("movement-unlocker", "Movement Unlocker", "Movement", "Removes ground speed limits for Source-style movement modes.", "Source2ZE", "https://github.com/Source2ZE/MovementUnlocker", true, false, ["metamod-source"], "movementunlocker.vdf"),
+        new("rampbug-fix", "RampBugFix", "Movement", "Mitigates common CS2 surf ramp bugs; upstream notes that no fix is perfect.", "Interesting-exe", "https://github.com/Interesting-exe/CS2Fixes-RampbugFix", true, true, ["metamod-source"], "cs2fixes-rampbugfix.vdf"),
         new("sharp-timer", "SharpTimer", "Movement", "Timer, checkpoints and rankings for Surf and Bhop.", "Letaryat community fork", "https://github.com/Letaryat/poor-sharptimer", true, true, ["counterstrikesharp", "cs2-tags"]),
-        new("cs2kz", "CS2KZ", "Movement", "Official KZGlobalTeam Metamod plugin for CS2 KZ.", "KZGlobalTeam", "https://github.com/KZGlobalTeam/cs2kz-metamod", true, false, ["metamod-source"]),
+        new("cs2kz", "CS2KZ", "Movement", "Official KZGlobalTeam Metamod plugin for CS2 KZ.", "KZGlobalTeam", "https://github.com/KZGlobalTeam/cs2kz-metamod", true, false, ["metamod-source"], "cs2kz.vdf"),
         new("warcraft-rpg", "Warcraft RPG", "Progression", "Classes, XP, skills and ultimates. Kept manual because the known upstream changed maintainers and has no trusted stable channel.", "Community", "https://github.com/Wngui/CS2WarcraftMod", false, true, ["counterstrikesharp"])
     ];
 
