@@ -20,6 +20,63 @@
   color: var(--muted);
   font-size: 0.66rem;
 }
+.basic-import {
+  margin-bottom: 14px;
+}
+.basic-import > header p:last-child {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.basic-safe,
+.basic-external-label {
+  color: var(--green);
+  font:
+    700 0.6rem Consolas,
+    monospace;
+}
+.basic-safe {
+  padding: 5px 8px;
+  border: 1px solid #315c49;
+  border-radius: 99px;
+  background: #10231c;
+}
+.basic-import form {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.8fr) minmax(150px, 1fr) 130px 150px;
+  gap: 10px;
+  align-items: end;
+}
+.basic-import label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+.basic-import label small {
+  min-height: 15px;
+  color: #708094;
+  font-size: 0.56rem;
+}
+.basic-import form button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.basic-import-result,
+.basic-import-note {
+  margin: 12px 0 0;
+  font-size: 0.64rem;
+  line-height: 1.55;
+}
+.basic-import-result {
+  color: var(--green);
+}
+.basic-import-note {
+  padding-top: 11px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+}
 .basic-server {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -275,6 +332,13 @@
   }
   .basic-select small {
     grid-column: 1;
+  }
+  .basic-import form {
+    grid-template-columns: 1fr;
+  }
+  .basic-import form button {
+    grid-column: 1;
+    width: 100%;
   }
   .basic-server {
     grid-template-columns: 1fr;

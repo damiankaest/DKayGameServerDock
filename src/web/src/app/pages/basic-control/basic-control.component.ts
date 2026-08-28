@@ -25,6 +25,12 @@ export class BasicControlComponent {
   readonly selectedServerId = signal('');
   readonly selectedServer = signal<GameServer | null>(null);
   readonly loading = signal(true);
+  readonly importName = signal('Mein CS2 Server');
+  readonly importDirectory = signal('');
+  readonly importPort = signal(27015);
+  readonly importRamLimitMb = signal(4096);
+  readonly importing = signal(false);
+  readonly importMessage = signal('');
   readonly actioning = signal('');
   readonly command = signal('');
   readonly commandRunning = signal(false);
@@ -51,6 +57,52 @@ export class BasicControlComponent {
     this.error.set('');
     this.refreshSelectedServer();
     this.loadBasicConfiguration(serverId);
+  }
+
+  updateImportText(key: 'name' | 'directory', event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (key === 'name') this.importName.set(value);
+    else this.importDirectory.set(value);
+  }
+
+  updateImportNumber(key: 'port' | 'ramLimitMb', event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (key === 'port') this.importPort.set(value);
+    else this.importRamLimitMb.set(value);
+  }
+
+  importExistingCs2(): void {
+    const name = this.importName().trim();
+    const installDirectory = this.importDirectory().trim();
+    if (!name || !installDirectory || this.importing()) return;
+
+    this.error.set('');
+    this.importMessage.set('');
+    this.importing.set(true);
+    this.api
+      .importExistingCs2Server({
+        name,
+        installDirectory,
+        port: this.importPort(),
+        ramLimitMb: this.importRamLimitMb(),
+      })
+      .pipe(finalize(() => this.importing.set(false)))
+      .subscribe({
+        next: (server) => {
+          this.servers.update((servers) =>
+            [...servers, server].sort((left, right) => left.name.localeCompare(right.name)),
+          );
+          this.selectedServerId.set(server.id);
+          this.selectedServer.set(server);
+          this.commandHistory.set([]);
+          this.importMessage.set(
+            'Der vorhandene Ordner wurde registriert. Es wurden keine Spieldateien installiert oder verschoben.',
+          );
+          this.loadBasicConfiguration(server.id);
+        },
+        error: (error) =>
+          this.error.set(error.error?.detail ?? 'Der CS2-Ordner konnte nicht registriert werden.'),
+      });
   }
 
   action(action: 'start' | 'stop' | 'restart'): void {

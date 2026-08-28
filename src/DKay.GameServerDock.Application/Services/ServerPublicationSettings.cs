@@ -9,6 +9,7 @@ public static class ServerPublicationSettings
 {
     private const string PublishedKey = "_dock.public.published";
     private const string PublicPortKey = "_dock.public.port";
+    private const string ExternalInstallationKey = "_dock.storage.external";
 
     public static ServerPublicationState Read(GameServerInstance server)
     {
@@ -47,13 +48,35 @@ public static class ServerPublicationSettings
         var merged = new Dictionary<string, string>(gameSettings, StringComparer.Ordinal);
         merged[PublishedKey] = publication.Published ? "true" : "false";
         merged[PublicPortKey] = publication.PublicPort.ToString(CultureInfo.InvariantCulture);
+        if (IsExternalInstallation(server))
+        {
+            merged[ExternalInstallationKey] = "true";
+        }
         return JsonSerializer.Serialize(merged);
+    }
+
+    public static string MarkExternalInstallation(IReadOnlyDictionary<string, string> gameSettings)
+    {
+        var settings = new Dictionary<string, string>(gameSettings, StringComparer.Ordinal)
+        {
+            [ExternalInstallationKey] = "true"
+        };
+        return JsonSerializer.Serialize(settings);
+    }
+
+    public static bool IsExternalInstallation(GameServerInstance server)
+    {
+        var settings = ReadSettings(server.SettingsJson);
+        return settings.TryGetValue(ExternalInstallationKey, out var value) &&
+               bool.TryParse(value, out var external) &&
+               external;
     }
 
     public static void RemoveMetadata(IDictionary<string, string> settings)
     {
         settings.Remove(PublishedKey);
         settings.Remove(PublicPortKey);
+        settings.Remove(ExternalInstallationKey);
     }
 
     private static Dictionary<string, string> ReadSettings(string settingsJson) =>

@@ -6,6 +6,7 @@ before more presets, plugins or map automation are added.
 ## Included
 
 - select an existing server registered in DKayGameServerDock;
+- register an existing CS2 installation from any absolute host path without running SteamCMD;
 - start, stop or restart the selected process;
 - send a single-line command from the web UI;
 - show the RCON or standard-input response in a short local browser history;
@@ -13,6 +14,21 @@ before more presets, plugins or map automation are added.
 
 The command path uses the registered game adapter directly. CS2 commands use the protected local
 RCON connection; no shell and no `.bat` file is involved.
+
+## Existing CS2 folders
+
+The browser runs on an administrator workstation and therefore cannot open a native folder picker
+for the remote Windows host. Basic Control accepts the absolute host path instead, for example
+`D:\Servers\CS2`. The API canonicalizes the path and only registers it when
+`game\bin\win64\cs2.exe` exists (or the corresponding Linux executable on a Linux host).
+
+Imported installations are marked as external. Registration does not move or reinstall game
+files, and the Dock refuses recursive file deletion for external installations. Removing one from
+the Dock must use the database-only option. The first Basic CFG is written only when settings are
+saved or the server is started.
+
+The Windows service account must have read/write access to the imported directory so it can create
+the protected RCON secret and generated CFG files when settings are saved or the server is started.
 
 ## Persistent CS2 configuration
 

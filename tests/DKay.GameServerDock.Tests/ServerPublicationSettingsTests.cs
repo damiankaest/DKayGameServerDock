@@ -51,6 +51,23 @@ public sealed class ServerPublicationSettingsTests
         Assert.Equal(35565, publication.PublicPort);
     }
 
+    [Fact]
+    public void Preserves_external_installation_marker_when_game_settings_change()
+    {
+        var server = CreateServer(port: 27015);
+        server.UpdatePublication(
+            ServerPublicationSettings.MarkExternalInstallation(
+                new Dictionary<string, string> { ["hostname"] = "Imported" }),
+            DateTimeOffset.UtcNow);
+
+        var json = ServerPublicationSettings.MergeGameSettings(
+            server,
+            new Dictionary<string, string> { ["hostname"] = "Renamed" });
+        server.UpdatePublication(json, DateTimeOffset.UtcNow);
+
+        Assert.True(ServerPublicationSettings.IsExternalInstallation(server));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(65536)]

@@ -36,6 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHostMetricsProvider, HostMetricsProvider>();
         services.AddSingleton<IHostReadinessProvider, HostReadinessProvider>();
         services.AddSingleton<IPathPolicy>(_ => new PathPolicy(options.ServersRoot));
+        services.AddSingleton<IExistingCs2InstallationValidator, ExistingCs2InstallationValidator>();
         services.AddSingleton<IServerWorkQueue, ServerWorkQueue>();
         services.AddSingleton<IServerRuntimeStateStore, ServerRuntimeStateStore>();
         services.AddSingleton<IProcessSupervisor, ManagedProcessSupervisor>();

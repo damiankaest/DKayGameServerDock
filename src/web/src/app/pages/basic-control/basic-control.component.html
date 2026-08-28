@@ -39,6 +39,78 @@
     }
   </section>
 
+  <section class="basic-import panel">
+    <header>
+      <div>
+        <p class="eyebrow">VORHANDENE CS2-INSTALLATION</p>
+        <h2>Serverordner registrieren</h2>
+        <p>
+          Gib den absoluten Pfad auf dem Gameserver ein. Der Ordner darf auf jedem Laufwerk liegen;
+          er wird weder verschoben noch über SteamCMD neu installiert.
+        </p>
+      </div>
+      <span class="basic-safe">EXTERN</span>
+    </header>
+    <form (submit)="$event.preventDefault(); importExistingCs2()">
+      <label class="basic-path-field">
+        <span>Absoluter Serverpfad</span>
+        <input
+          type="text"
+          autocomplete="off"
+          placeholder="z. B. D:\GameServers\MeinCS2"
+          [value]="importDirectory()"
+          (input)="updateImportText('directory', $event)"
+        />
+        <small>Erwartet wird darin <code>game\bin\win64\cs2.exe</code>.</small>
+      </label>
+      <label>
+        <span>Name im Dock</span>
+        <input
+          type="text"
+          maxlength="80"
+          [value]="importName()"
+          (input)="updateImportText('name', $event)"
+        />
+      </label>
+      <label>
+        <span>Server-Port</span>
+        <input
+          type="number"
+          min="1"
+          max="65535"
+          [value]="importPort()"
+          (input)="updateImportNumber('port', $event)"
+        />
+      </label>
+      <label>
+        <span>RAM-Limit (MB)</span>
+        <input
+          type="number"
+          min="512"
+          step="512"
+          [value]="importRamLimitMb()"
+          (input)="updateImportNumber('ramLimitMb', $event)"
+        />
+      </label>
+      <button
+        class="primary-button"
+        type="submit"
+        [disabled]="importing() || !importDirectory().trim() || !importName().trim()"
+      >
+        {{ importing() ? 'Prüfe und registriere…' : 'Vorhandenen CS2-Server registrieren' }}
+      </button>
+    </form>
+    @if (importMessage()) {
+      <p class="basic-import-result">{{ importMessage() }}</p>
+    }
+    <p class="basic-import-note">
+      Ein Browser kann keinen Ordnerdialog auf dem entfernten Windows-Server öffnen. Deshalb wird
+      der Host-Pfad hier eingegeben und anschließend serverseitig geprüft. Importierte Dateien sind
+      vor dem Löschen durch das Dock geschützt. Das Windows-Dienstkonto des Docks benötigt
+      Lese-/Schreibrechte auf diesem Ordner.
+    </p>
+  </section>
+
   @if (selectedServer(); as server) {
     <section class="basic-server panel">
       <div class="basic-server-main">
@@ -50,6 +122,9 @@
             {{ server.templateName }} · Port {{ server.port }} · PID
             {{ server.process.processId ?? '—' }}
           </p>
+          @if (server.externalInstallation) {
+            <small class="basic-external-label">Vorhandener externer Serverordner</small>
+          }
         </div>
       </div>
       <div class="basic-server-state">

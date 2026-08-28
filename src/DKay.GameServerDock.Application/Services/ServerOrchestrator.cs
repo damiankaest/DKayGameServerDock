@@ -46,6 +46,75 @@ public sealed class ServerOrchestrator(
         return server;
     }
 
+    public async Task<GameServerInstance> ImportExistingCs2Async(
+        ImportExistingCs2ServerRequest request,
+        IExistingCs2InstallationValidator installationValidator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
+
+        if (request.Port is < 1 or > 65535)
+        {
+            throw new InvalidOperationException("Der Server-Port muss zwischen 1 und 65535 liegen.");
+        }
+
+        if (request.RamLimitMb < 512)
+        {
+            throw new InvalidOperationException("Das RAM-Limit muss mindestens 512 MB betragen.");
+        }
+
+        var installDirectory = installationValidator.Validate(request.InstallDirectory);
+        var existingServers = await servers.ListAsync(cancellationToken);
+        if (existingServers.Any(server =>
+                string.Equals(
+                    Path.GetFullPath(server.InstallDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    installDirectory,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("Dieser CS2-Ordner ist bereits im Dock registriert.");
+        }
+
+        if (await servers.IsPortAllocatedAsync(request.Port, cancellationToken))
+        {
+            throw new InvalidOperationException($"Port {request.Port} ist bereits einem anderen Server zugewiesen.");
+        }
+
+        var module = modules.GetRequired("counter-strike-2");
+        var settings = module.Descriptor.Settings.ToDictionary(
+            definition => definition.Key,
+            definition => definition.Key == "hostname"
+                ? request.Name.Trim()
+                : definition.DefaultValue ?? string.Empty,
+            StringComparer.Ordinal);
+        ValidateSettings(module.Descriptor, settings);
+
+        var now = clock.UtcNow;
+        var server = GameServerInstance.Create(
+            Guid.NewGuid(),
+            request.Name,
+            module.Descriptor.Id,
+            installDirectory,
+            "existing",
+            request.Port,
+            null,
+            null,
+            request.RamLimitMb,
+            ServerPublicationSettings.MarkExternalInstallation(settings),
+            now);
+        server.ChangeStatus(ServerStatus.Stopped, now);
+
+        await servers.AddAsync(server, cancellationToken);
+        await events.RecordAsync(
+            ServerEvent.Create(
+                server.Id,
+                ServerEventType.InstallationCompleted,
+                "Existing CS2 installation registered without installing or moving game files.",
+                now),
+            cancellationToken);
+        return server;
+    }
+
     public async Task InstallAsync(Guid serverId, CancellationToken cancellationToken)
     {
         var server = await GetRequiredAsync(serverId, cancellationToken);
@@ -241,6 +310,12 @@ public sealed class ServerOrchestrator(
 
         if (deleteFiles)
         {
+            if (ServerPublicationSettings.IsExternalInstallation(server))
+            {
+                throw new InvalidOperationException(
+                    "Importierte Serverdateien werden aus Sicherheitsgründen nicht gelöscht. Entferne nur die Registrierung aus dem Dock.");
+            }
+
             var directory = paths.ValidateServerDirectory(server.InstallDirectory);
             if (Directory.Exists(directory))
             {

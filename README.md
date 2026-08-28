@@ -9,6 +9,7 @@ The project is independent from CouchClash. A later CouchClash integration can u
 ## What already works
 
 - Basic Control start page for selecting a registered server, starting/stopping it and sending direct commands
+- Safe registration of an existing CS2 folder from any host drive without reinstalling or moving it
 - Small persistent CS2 `dkay-basic.cfg` for auto-bhop, gravity and bot quota with live RCON readback
 - Responsive dark-mode dashboard inspired by modern infrastructure panels
 - Local administrator bootstrap and cookie-based login
@@ -91,9 +92,10 @@ npm start
 
 Open `http://localhost:4200`. On first access, create the local administrator. Angular proxies API and SignalR traffic to `http://localhost:5080`.
 
-The authenticated start page is intentionally the small **Basic Control** workflow. It operates
-servers already registered in the Dock and keeps the larger dashboard and advanced CS2 pages
-available through the navigation. See [docs/basic-control.md](docs/basic-control.md).
+The authenticated start page is intentionally the small **Basic Control** workflow. It can register
+an existing CS2 installation by absolute path, operates servers already known to the Dock and keeps
+the larger dashboard and advanced CS2 pages available through the navigation. See
+[docs/basic-control.md](docs/basic-control.md).
 
 Run checks:
 

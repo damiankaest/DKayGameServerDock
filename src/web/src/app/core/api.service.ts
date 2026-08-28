@@ -20,6 +20,7 @@ import {
   GameTemplate,
   HostReadinessSnapshot,
   HostSnapshot,
+  ImportExistingCs2ServerRequest,
   PublicServerList,
   ServerEvent,
   ServerPublication,
@@ -73,6 +74,10 @@ export class ApiService {
 
   createServer(request: CreateServerRequest): Observable<GameServer> {
     return this.http.post<GameServer>('/api/servers', request);
+  }
+
+  importExistingCs2Server(request: ImportExistingCs2ServerRequest): Observable<GameServer> {
+    return this.http.post<GameServer>('/api/servers/import-cs2', request);
   }
 
   serverAction(

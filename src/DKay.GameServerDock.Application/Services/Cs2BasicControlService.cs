@@ -24,7 +24,6 @@ public sealed class Cs2BasicControlService(
     public async Task<Cs2BasicConfigurationState> GetAsync(Guid serverId, CancellationToken cancellationToken)
     {
         var server = await GetCs2ServerAsync(serverId, cancellationToken);
-        configStore.Prepare(server);
         var running = server.Status == ServerStatus.Running && processes.GetSnapshot(server.Id).IsRunning;
         return new Cs2BasicConfigurationState(
             configStore.Read(server),

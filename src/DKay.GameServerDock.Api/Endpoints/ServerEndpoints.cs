@@ -30,6 +30,7 @@ public static class ServerEndpoints
 
         var group = endpoints.MapGroup("/api/servers");
         group.MapGet("/", ListAsync);
+        group.MapPost("/import-cs2", ImportExistingCs2Async);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPost("/", CreateAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
@@ -151,6 +152,20 @@ public static class ServerEndpoints
         var server = await orchestrator.CreateAsync(request, cancellationToken);
         await queue.EnqueueAsync(new ServerWorkItem(server.Id, ServerWorkKind.Install), cancellationToken);
         return Results.Accepted(
+            $"/api/servers/{server.Id}",
+            ToResponse(server, new ProcessSnapshot(false, null, null, null, null, 0, 0), modules, dockOptions));
+    }
+
+    private static async Task<IResult> ImportExistingCs2Async(
+        ImportExistingCs2ServerRequest request,
+        ServerOrchestrator orchestrator,
+        IExistingCs2InstallationValidator installationValidator,
+        IGameModuleRegistry modules,
+        DockOptions dockOptions,
+        CancellationToken cancellationToken)
+    {
+        var server = await orchestrator.ImportExistingCs2Async(request, installationValidator, cancellationToken);
+        return Results.Created(
             $"/api/servers/{server.Id}",
             ToResponse(server, new ProcessSnapshot(false, null, null, null, null, 0, 0), modules, dockOptions));
     }
@@ -307,6 +322,7 @@ public static class ServerEndpoints
             CurrentMap = currentMap,
             Capabilities = module.Descriptor.Capabilities.ToString(),
             NetworkProtocols = module.Descriptor.NetworkProtocols,
+            ExternalInstallation = ServerPublicationSettings.IsExternalInstallation(server),
             Publication = ToPublicationResponse(ServerPublicationSettings.Read(server), dockOptions)
         };
     }
