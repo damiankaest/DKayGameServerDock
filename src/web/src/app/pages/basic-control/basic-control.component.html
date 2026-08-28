@@ -13,7 +13,8 @@
     <p class="error-banner">{{ error() }}</p>
   }
 
-  <section class="basic-select panel">
+  <div class="basic-grid">
+  <section class="basic-select panel full">
     <label for="basic-server">Vorhandenen Server auswählen</label>
     <select
       id="basic-server"
@@ -39,7 +40,7 @@
     }
   </section>
 
-  <section class="basic-import panel">
+  <section class="basic-import panel full">
     <header>
       <div>
         <p class="eyebrow">VORHANDENE CS2-INSTALLATION</p>
@@ -122,6 +123,9 @@
             {{ server.templateName }} · Port {{ server.port }} · PID
             {{ server.process.processId ?? '—' }}
           </p>
+          @if (server.currentMap) {
+            <p class="basic-current-map">Aktive Map: <code>{{ server.currentMap }}</code></p>
+          }
           @if (server.externalInstallation) {
             <small class="basic-external-label">Vorhandener externer Serverordner</small>
           }
@@ -347,7 +351,88 @@
       </section>
     }
 
-    <section class="basic-console panel">
+    @if (server.templateId === 'counter-strike-2') {
+      <section class="basic-config panel basic-plugins">
+        <header>
+          <div>
+            <p class="eyebrow">GELADENE PLUGINS</p>
+            <h2>Module &amp; Plugins</h2>
+            <p>Live aus dem laufenden Server gelesen (Metamod &amp; CounterStrikeSharp).</p>
+          </div>
+          <span
+            class="status"
+            [attr.data-status]="pluginState()?.liveReadSucceeded ? 'Running' : 'Stopped'"
+            >{{ pluginState()?.liveReadSucceeded ? 'LIVE' : 'AUS' }}</span
+          >
+        </header>
+
+        <div class="basic-plugin-group">
+          <strong>Metamod-Plugins</strong>
+          <small>Native Loader — Änderung nur per Server-Neustart.</small>
+          @for (plugin of metaPlugins(); track plugin.id) {
+            <div class="basic-plugin-row">
+              <span [class.basic-plugin-error]="plugin.status !== 'LOADED'">{{ plugin.name }}</span>
+              <code>{{ plugin.status }}{{ plugin.version ? ' · ' + plugin.version : '' }}</code>
+            </div>
+          } @empty {
+            <p class="basic-map-note">Keine Metamod-Plugins geladen.</p>
+          }
+        </div>
+
+        <div class="basic-plugin-group">
+          <strong>CounterStrikeSharp-Plugins</strong>
+          <small>Live laden / entladen (nur wenn CounterStrikeSharp läuft).</small>
+          @for (plugin of cssPlugins(); track plugin.id) {
+            <div class="basic-plugin-row">
+              <span>{{ plugin.name }}</span>
+              <code>{{ plugin.version ?? '' }}</code>
+              <div class="basic-plugin-actions">
+                <button
+                  class="ghost-button small"
+                  type="button"
+                  [disabled]="pluginActioning() !== ''"
+                  (click)="runPluginAction('reload', plugin.name)"
+                >
+                  Neu laden
+                </button>
+                <button
+                  class="danger-button small"
+                  type="button"
+                  [disabled]="pluginActioning() !== ''"
+                  (click)="runPluginAction('unload', plugin.name)"
+                >
+                  Entladen
+                </button>
+              </div>
+            </div>
+          } @empty {
+            <p class="basic-map-note">Keine CounterStrikeSharp-Plugins geladen.</p>
+          }
+          @for (name of notLoadedCssPlugins(); track name) {
+            <div class="basic-plugin-row">
+              <span class="basic-plugin-offline">{{ name }}</span>
+              <code>installiert, nicht geladen</code>
+              <div class="basic-plugin-actions">
+                <button
+                  class="primary-button small"
+                  type="button"
+                  [disabled]="pluginActioning() !== ''"
+                  (click)="runPluginAction('load', name)"
+                >
+                  Laden
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (pluginState()?.message) {
+          <p class="basic-map-note">{{ pluginState()?.message }}</p>
+        }
+      </section>
+    }
+
+    <section class="basic-console panel full">
       <header>
         <div>
           <p class="eyebrow">DIREKTER COMMAND</p>
@@ -403,7 +488,7 @@
       }
     </section>
 
-    <section class="basic-history panel">
+    <section class="basic-history panel full">
       <header>
         <div>
           <p class="eyebrow">ERGEBNISSE</p>
@@ -434,4 +519,5 @@
       </div>
     </section>
   }
+  </div>
 </div>

@@ -832,6 +832,208 @@ public sealed partial class Cs2LiveControlService(
         return await mapChanges.CancelAsync(server, cancellationToken);
     }
 
+    public async Task<Cs2PluginState> GetPluginStateAsync(
+        Guid serverId,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        var snapshot = processes.GetSnapshot(server.Id);
+        if (server.Status != ServerStatus.Running || !snapshot.IsRunning)
+        {
+            return new Cs2PluginState([], GetInstalledCssPlugins(server), false, "Start the CS2 server to read its loaded plugins.");
+        }
+
+        var adapter = modules.GetRequired(server.TemplateId).Adapter;
+        var plugins = new List<Cs2LoadedPlugin>();
+        foreach (var command in new[] { "meta list", "css_plugins list" })
+        {
+            try
+            {
+                var result = await adapter.ExecuteConsoleCommandAsync(
+                    server,
+                    processes,
+                    adapter.NormalizeConsoleCommand(command),
+                    cancellationToken);
+                if (command.StartsWith("meta", StringComparison.Ordinal))
+                {
+                    plugins.AddRange(ParseMetaList(result.Output));
+                }
+                else
+                {
+                    plugins.AddRange(ParseCssPlugins(result.Output));
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // A loader that is not installed simply reports an unknown command. Treat that as
+                // "no plugins from this loader" instead of failing the whole plugin panel.
+            }
+        }
+
+        return new Cs2PluginState(plugins, GetInstalledCssPlugins(server), true, null);
+    }
+
+    public async Task<Cs2PluginState> RunPluginActionAsync(
+        Guid serverId,
+        RunCs2PluginActionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        var snapshot = processes.GetSnapshot(server.Id);
+        if (server.Status != ServerStatus.Running || !snapshot.IsRunning)
+        {
+            throw new InvalidOperationException("Start the CS2 server before loading or unloading plugins.");
+        }
+
+        var action = request.Action?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (action is not ("load" or "unload" or "reload"))
+        {
+            throw new InvalidOperationException("Plugin action must be load, unload or reload.");
+        }
+
+        var name = request.Name?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 128 || !PluginNamePattern().IsMatch(name))
+        {
+            throw new InvalidOperationException("Plugin name is invalid.");
+        }
+
+        var adapter = modules.GetRequired(server.TemplateId).Adapter;
+        var result = await adapter.ExecuteConsoleCommandAsync(
+            server,
+            processes,
+            adapter.NormalizeConsoleCommand($"css_plugins {action} {name}"),
+            cancellationToken);
+
+        var state = await GetPluginStateAsync(serverId, cancellationToken);
+        var output = result.Output?.Trim();
+        return state with
+        {
+            Message = string.IsNullOrWhiteSpace(output)
+                ? $"css_plugins {action} {name} ausgeführt."
+                : output
+        };
+    }
+
+    private static IEnumerable<Cs2LoadedPlugin> ParseMetaList(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            yield break;
+        }
+
+        foreach (var line in output.Split('\n'))
+        {
+            var match = MetaListLine().Match(line);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var id = match.Groups["id"].Value;
+            var rest = match.Groups["rest"].Value.Trim();
+            var error = MetaError().Match(rest);
+            if (error.Success)
+            {
+                yield return new Cs2LoadedPlugin(
+                    id,
+                    error.Groups["name"].Value.Trim(),
+                    "metamod",
+                    error.Groups["status"].Value.ToUpperInvariant(),
+                    null,
+                    null);
+                continue;
+            }
+
+            var loaded = MetaLoaded().Match(rest);
+            if (loaded.Success)
+            {
+                yield return new Cs2LoadedPlugin(
+                    id,
+                    loaded.Groups["name"].Value.Trim(),
+                    "metamod",
+                    "LOADED",
+                    loaded.Groups["version"].Value.Trim(),
+                    loaded.Groups["author"].Value.Trim());
+                continue;
+            }
+
+            yield return new Cs2LoadedPlugin(id, rest, "metamod", "LOADED", null, null);
+        }
+    }
+
+    private static IEnumerable<Cs2LoadedPlugin> ParseCssPlugins(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            yield break;
+        }
+
+        foreach (var line in output.Split('\n'))
+        {
+            var match = CssPluginLine().Match(line);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            yield return new Cs2LoadedPlugin(
+                match.Groups["id"].Value,
+                match.Groups["name"].Value,
+                "counterstrikesharp",
+                match.Groups["status"].Value.ToUpperInvariant(),
+                match.Groups["version"].Value,
+                match.Groups["author"].Value);
+        }
+    }
+
+    private static IReadOnlyList<string> GetInstalledCssPlugins(GameServerInstance server)
+    {
+        var pluginsRoot = Path.Combine(
+            server.InstallDirectory,
+            "game",
+            "csgo",
+            "addons",
+            "counterstrikesharp",
+            "plugins");
+        if (!Directory.Exists(pluginsRoot))
+        {
+            return [];
+        }
+
+        try
+        {
+            return Directory.EnumerateDirectories(pluginsRoot)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (IOException)
+        {
+            return [];
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    [GeneratedRegex(@"^\s*\[(?<id>\d+)\]\s+(?<rest>.+?)\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex MetaListLine();
+
+    [GeneratedRegex(@"^(?<name>.+?)\s+<(?<status>[A-Za-z]+)>$", RegexOptions.CultureInvariant)]
+    private static partial Regex MetaError();
+
+    [GeneratedRegex(@"^(?<name>.+?)\s+\((?<version>[^)]+)\)\s+by\s+(?<author>.+)$", RegexOptions.CultureInvariant)]
+    private static partial Regex MetaLoaded();
+
+    [GeneratedRegex(@"^\s*\[#(?<id>\d+):(?<status>[A-Za-z]+)\]:\s+""(?<name>[^""]+)""\s+\((?<version>[^)]+)\)\s+by\s+(?<author>.+?)\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex CssPluginLine();
+
+    [GeneratedRegex(@"^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex PluginNamePattern();
+
     public async Task<ConfigureCs2GsltResult> ConfigureGsltAsync(
         Guid serverId,
         ConfigureCs2GsltRequest request,

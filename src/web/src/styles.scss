@@ -762,3 +762,24 @@ input:focus, select:focus { border-color: #4b8d72; box-shadow: 0 0 0 3px #4de3a1
   .connect-strip { align-items: stretch; flex-direction: column; }
   .connect-copy { min-width: 0; }
 }
+
+/* Basic Control: tile grid and live plugin panel */
+.basic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.basic-grid > .panel { margin-bottom: 0; }
+.basic-current-map { margin: 4px 0 0; color: var(--muted); font-size: 0.7rem; }
+.basic-current-map code { color: var(--green); font: 0.72rem Consolas, monospace; }
+.basic-plugins { margin-bottom: 14px; }
+.basic-plugins > header p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 0.7rem; }
+.basic-plugin-group { display: grid; gap: 6px; margin-top: 12px; }
+.basic-plugin-group > strong { color: var(--text); font-size: 0.72rem; }
+.basic-plugin-group > small { margin-bottom: 3px; color: var(--muted); font-size: 0.6rem; }
+.basic-plugin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 9px 12px; border: 1px solid var(--line-soft); border-radius: 8px; background: #0d1219; }
+.basic-plugin-row > span { overflow: hidden; color: var(--text); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+.basic-plugin-row > code { color: var(--green); font-size: 0.62rem; }
+.basic-plugin-row > .basic-plugin-error, .basic-plugin-row > .basic-plugin-offline { color: var(--amber); }
+.basic-plugin-actions { display: flex; gap: 6px; }
+.basic-plugin-actions .ghost-button, .basic-plugin-actions .danger-button, .basic-plugin-actions .primary-button { padding: 0 10px; }
+@media (max-width: 760px) {
+  .basic-grid { grid-template-columns: 1fr; }
+  .basic-plugin-row { grid-template-columns: 1fr; }
+}

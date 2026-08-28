@@ -64,6 +64,24 @@ public sealed record ScheduleCs2MapByMapRequest(
     string? WorkshopId,
     int DelaySeconds);
 
+public sealed record Cs2LoadedPlugin(
+    string Id,
+    string Name,
+    string Loader,
+    string Status,
+    string? Version,
+    string? Author);
+
+public sealed record Cs2PluginState(
+    IReadOnlyList<Cs2LoadedPlugin> Plugins,
+    IReadOnlyList<string> InstalledCssPlugins,
+    bool LiveReadSucceeded,
+    string? Message);
+
+public sealed record RunCs2PluginActionRequest(
+    string Action,
+    string Name);
+
 public sealed record ApplyCs2LiveConfigurationRequest(
     IReadOnlyDictionary<string, string> Values,
     IReadOnlyList<string>? ChangedKeys = null);

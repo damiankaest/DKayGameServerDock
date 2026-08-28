@@ -1,7 +1,7 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2BasicConfiguration, Cs2LocalMap, Cs2MapChangeState, Cs2ModeCatalog, Cs2WorkshopMap, GameServer } from '../../core/models';
+import { ConsoleCommandResult, Cs2BasicConfiguration, Cs2LoadedPlugin, Cs2LocalMap, Cs2MapChangeState, Cs2ModeCatalog, Cs2PluginState, Cs2WorkshopMap, GameServer } from '../../core/models';
 
 interface CommandEntry {
   command: string;
@@ -47,6 +47,8 @@ export class BasicControlComponent {
   readonly mapChangeDelay = signal(30);
   readonly mapChangeState = signal<Cs2MapChangeState | null>(null);
   readonly mapMessage = signal('');
+  readonly pluginState = signal<Cs2PluginState | null>(null);
+  readonly pluginActioning = signal('');
   readonly error = signal('');
 
   constructor() {
@@ -55,6 +57,7 @@ export class BasicControlComponent {
     this.refreshHandle = setInterval(() => {
       this.refreshSelectedServer(true);
       this.loadMapChangeState();
+      this.loadPluginState();
     }, 3000);
     this.destroyRef.onDestroy(() => {
       if (this.refreshHandle !== null) clearInterval(this.refreshHandle);
@@ -72,10 +75,12 @@ export class BasicControlComponent {
     this.workshopResults.set([]);
     this.mapMessage.set('');
     this.mapChangeState.set(null);
+    this.pluginState.set(null);
     this.error.set('');
     this.refreshSelectedServer();
     this.loadBasicConfiguration(serverId);
     this.loadMapChangeState();
+    this.loadPluginState();
   }
 
   updateImportText(key: 'name' | 'directory', event: Event): void {
@@ -324,6 +329,52 @@ export class BasicControlComponent {
       },
       error: (error) =>
         this.error.set(error.error?.detail ?? 'Map-Wechsel konnte nicht abgebrochen werden.'),
+    });
+  }
+
+  metaPlugins(): Cs2LoadedPlugin[] {
+    return this.pluginState()?.plugins.filter((plugin) => plugin.loader === 'metamod') ?? [];
+  }
+
+  cssPlugins(): Cs2LoadedPlugin[] {
+    return this.pluginState()?.plugins.filter((plugin) => plugin.loader === 'counterstrikesharp') ?? [];
+  }
+
+  notLoadedCssPlugins(): string[] {
+    const loaded = new Set(this.cssPlugins().map((plugin) => plugin.name.toLowerCase()));
+    return (this.pluginState()?.installedCssPlugins ?? []).filter(
+      (name) => !loaded.has(name.toLowerCase()),
+    );
+  }
+
+  runPluginAction(action: 'load' | 'unload' | 'reload', name: string): void {
+    const server = this.selectedServer();
+    if (!server || this.pluginActioning()) return;
+
+    this.error.set('');
+    this.pluginActioning.set(`${action}:${name}`);
+    this.api
+      .runCs2PluginAction(server.id, { action, name })
+      .pipe(finalize(() => this.pluginActioning.set('')))
+      .subscribe({
+        next: (state) => this.pluginState.set(state),
+        error: (error) =>
+          this.error.set(error.error?.detail ?? 'Plugin-Aktion konnte nicht ausgeführt werden.'),
+      });
+  }
+
+  private loadPluginState(): void {
+    const server = this.selectedServer();
+    if (!server || server.templateId !== 'counter-strike-2') {
+      this.pluginState.set(null);
+      return;
+    }
+
+    this.api.cs2Plugins(server.id).subscribe({
+      next: (state) => this.pluginState.set(state),
+      error: () => {
+        // Best effort: plugin state is optional context for the operator.
+      },
     });
   }
 

@@ -13,6 +13,8 @@ import {
   Cs2LiveControlState,
   Cs2LocalMapSearchResult,
   Cs2MapChangeState,
+  Cs2PluginState,
+  RunCs2PluginActionRequest,
   ScheduleCs2MapByMapRequest,
   Cs2ModeApplyResult,
   Cs2ModeCatalog,
@@ -189,6 +191,14 @@ export class ApiService {
 
   cancelCs2MapChange(id: string): Observable<Cs2MapChangeState> {
     return this.http.delete<Cs2MapChangeState>(`/api/servers/${id}/cs2-control/map-change`);
+  }
+
+  cs2Plugins(id: string): Observable<Cs2PluginState> {
+    return this.http.get<Cs2PluginState>(`/api/servers/${id}/cs2-plugins`);
+  }
+
+  runCs2PluginAction(id: string, request: RunCs2PluginActionRequest): Observable<Cs2PluginState> {
+    return this.http.post<Cs2PluginState>(`/api/servers/${id}/cs2-plugins/actions`, request);
   }
 
   configureCs2Gslt(id: string, token: string): Observable<ConfigureCs2GsltResult> {

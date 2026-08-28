@@ -452,6 +452,27 @@ export interface ScheduleCs2MapByMapRequest {
   delaySeconds: number;
 }
 
+export interface Cs2LoadedPlugin {
+  id: string;
+  name: string;
+  loader: 'metamod' | 'counterstrikesharp';
+  status: string;
+  version: string | null;
+  author: string | null;
+}
+
+export interface Cs2PluginState {
+  plugins: Cs2LoadedPlugin[];
+  installedCssPlugins: string[];
+  liveReadSucceeded: boolean;
+  message: string | null;
+}
+
+export interface RunCs2PluginActionRequest {
+  action: 'load' | 'unload' | 'reload';
+  name: string;
+}
+
 export interface Cs2LiveConfigurationApplyResult {
   values: Record<string, string>;
   appliedLive: boolean;
