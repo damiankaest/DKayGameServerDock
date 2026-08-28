@@ -286,6 +286,51 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
     public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key) =>
         runtime.SaveWorkshopApiKey(server, key);
 
+    public Cs2LocalMapSearchResult SearchLocalMaps(GameServerInstance server, string query, int take)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        query = query?.Trim() ?? string.Empty;
+        take = Math.Clamp(take, 1, 200);
+
+        var mapsRoot = Path.Combine(GetCsgoRoot(server), "maps");
+        var items = new List<Cs2LocalMap>();
+        if (Directory.Exists(mapsRoot))
+        {
+            foreach (var file in Directory.EnumerateFiles(mapsRoot, "*", SearchOption.TopDirectoryOnly))
+            {
+                var extension = Path.GetExtension(file);
+                if (!extension.Equals(".bsp", StringComparison.OrdinalIgnoreCase) &&
+                    !extension.Equals(".vpk", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var mapName = Path.GetFileNameWithoutExtension(file);
+                try
+                {
+                    Cs2ModeCatalog.ValidateMap(mapName, null);
+                }
+                catch (ArgumentException)
+                {
+                    continue;
+                }
+
+                if (query.Length > 0 && !mapName.Contains(query, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                items.Add(new Cs2LocalMap(mapName, "local", Cs2ModeCatalog.ResolvePresetId(mapName)));
+            }
+        }
+
+        var ordered = items
+            .OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
+            .Take(take)
+            .ToArray();
+        return new Cs2LocalMapSearchResult(query, items.Count, ordered);
+    }
+
     public async Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(
         GameServerInstance server,
         string query,

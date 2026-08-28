@@ -59,6 +59,8 @@ public sealed class Cs2ModeServiceTests
             new(false, null, false, "not configured");
         public Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key) =>
             throw new NotSupportedException();
+        public Cs2LocalMapSearchResult SearchLocalMaps(GameServerInstance server, string query, int take) =>
+            throw new NotSupportedException();
         public Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(GameServerInstance server, string query, int take, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task RepairAfterGameUpdateAsync(GameServerInstance server, CancellationToken cancellationToken) => Task.CompletedTask;

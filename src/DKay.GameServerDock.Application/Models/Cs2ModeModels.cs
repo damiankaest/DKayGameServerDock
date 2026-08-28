@@ -124,3 +124,13 @@ public sealed record Cs2ModeState(
 public sealed record Cs2ModeApplyResult(
     Cs2ModeState State,
     IReadOnlyList<string> QueuedPackageIds);
+
+public sealed record Cs2LocalMap(
+    string MapName,
+    string Source,
+    string? PresetId);
+
+public sealed record Cs2LocalMapSearchResult(
+    string Query,
+    int Total,
+    IReadOnlyList<Cs2LocalMap> Items);

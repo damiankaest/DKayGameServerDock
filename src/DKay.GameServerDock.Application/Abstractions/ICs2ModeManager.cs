@@ -36,6 +36,13 @@ public interface ICs2ModeManager
         CancellationToken cancellationToken);
     Cs2WorkshopAccessState GetWorkshopAccessState(GameServerInstance server);
     Cs2WorkshopAccessState SaveWorkshopApiKey(GameServerInstance server, string key);
+
+    /// <summary>
+    /// Lists map files already present in the server's <c>game/csgo/maps</c> directory, optionally
+    /// filtered by a free-text query, with the preset suggested for each map name.
+    /// </summary>
+    Cs2LocalMapSearchResult SearchLocalMaps(GameServerInstance server, string query, int take);
+
     Task<Cs2WorkshopSearchResult> SearchWorkshopMapsAsync(
         GameServerInstance server,
         string query,

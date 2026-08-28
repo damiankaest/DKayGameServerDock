@@ -176,7 +176,7 @@ public static partial class Cs2ModeCatalog
             "Progression",
             "RPG",
             "Fast respawns and progression-ready rules. The Warcraft/RPG plugin is deliberately a manual, experimental package until a maintained release is available.",
-            ["dm_", "aim_", "fy_"],
+            ["dm_", "aim_", "fy_", "awp_"],
             ["metamod-source", "counterstrikesharp", "warcraft-rpg"],
             [
                 Integer("mp_roundtime", "Round time", "30", 1, 60, "Long arena rounds."),
@@ -277,6 +277,20 @@ public static partial class Cs2ModeCatalog
         }
 
         return result;
+    }
+
+    public static string? ResolvePresetId(string mapName)
+    {
+        var normalized = mapName?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (normalized.Length == 0)
+        {
+            return null;
+        }
+
+        return Presets
+            .FirstOrDefault(preset => preset.MapPrefixes.Any(prefix =>
+                normalized.StartsWith(prefix, StringComparison.Ordinal)))
+            ?.Id;
     }
 
     public static string ResolveCombatMode(Cs2ModePresetDescriptor preset, string? value)

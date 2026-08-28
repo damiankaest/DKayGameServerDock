@@ -3,7 +3,7 @@ import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2PracticeMode, Cs2QuickAction, Cs2RespawnMode, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
+import { ConsoleCommandResult, Cs2AmmoMode, Cs2CombatMode, Cs2HudMode, Cs2LiveControlState, Cs2LiveSetting, Cs2LocalMap, Cs2ModeCatalog, Cs2ModePreset, Cs2ModeProfile, Cs2ModeState, Cs2PracticeMode, Cs2QuickAction, Cs2RespawnMode, Cs2WorkshopMap, GameServer, ServerEvent, ServerSelfTestResult } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
 
 @Component({
@@ -59,6 +59,11 @@ export class ServerDetailComponent implements OnDestroy {
   readonly workshopKey = signal('');
   readonly workshopKeySaving = signal(false);
   readonly workshopMessage = signal('');
+  readonly localMapQuery = signal('');
+  readonly localMapResults = signal<Cs2LocalMap[]>([]);
+  readonly localMapTotal = signal(0);
+  readonly localMapSearching = signal(false);
+  readonly localMapActivating = signal('');
   readonly actioning = signal('');
   readonly liveControl = signal<Cs2LiveControlState | null>(null);
   readonly liveValues = signal<Record<string, string>>({});
@@ -595,6 +600,11 @@ export class ServerDetailComponent implements OnDestroy {
     return this.modeCatalog()?.presets.find(preset => preset.id === this.selectedPresetId()) ?? null;
   }
 
+  presetNameById(presetId: string | null): string {
+    if (!presetId) return 'Kein Preset erkannt';
+    return this.modeCatalog()?.presets.find(preset => preset.id === presetId)?.name ?? presetId;
+  }
+
   movementPresets(): Cs2ModePreset[] {
     return this.modeCatalog()?.presets.filter(preset => ['surf', 'kz', 'bhop'].includes(preset.id)) ?? [];
   }
@@ -702,8 +712,22 @@ export class ServerDetailComponent implements OnDestroy {
 
   updateModeText(field: 'map' | 'workshop', event: Event): void {
     const value = (event.target as HTMLInputElement).value;
-    if (field === 'map') this.modeMapName.set(value);
-    else this.modeWorkshopId.set(value);
+    if (field === 'map') {
+      this.modeMapName.set(value);
+      const inferred = this.inferPreset(value);
+      if (inferred && inferred !== this.selectedPresetId()) {
+        this.selectPreset(inferred);
+      }
+    } else {
+      this.modeWorkshopId.set(value);
+    }
+  }
+
+  private inferPreset(mapName: string): string | null {
+    const normalized = mapName.trim().toLowerCase();
+    if (!normalized) return null;
+    return this.modeCatalog()?.presets.find(preset =>
+      preset.mapPrefixes.some(prefix => normalized.startsWith(prefix.toLowerCase())))?.id ?? null;
   }
 
   updateModeNumber(field: 'bots' | 'difficulty', event: Event): void {
@@ -779,14 +803,40 @@ export class ServerDetailComponent implements OnDestroy {
   }
 
   addWorkshopMap(map: Cs2WorkshopMap): void {
-    const inferredPreset = this.modeCatalog()?.presets.find(preset =>
-      preset.mapPrefixes.some(prefix => map.mapName.toLowerCase().startsWith(prefix.toLowerCase())));
-    if (inferredPreset && inferredPreset.id !== this.selectedPresetId()) {
-      this.selectPreset(inferredPreset.id);
+    const inferredPreset = this.inferPreset(map.mapName);
+    if (inferredPreset && inferredPreset !== this.selectedPresetId()) {
+      this.selectPreset(inferredPreset);
     }
     this.modeMapName.set(map.mapName);
     this.modeWorkshopId.set(map.publishedFileId);
     this.applyModePreset(map);
+  }
+
+  updateLocalMapQuery(event: Event): void {
+    this.localMapQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  searchLocalMaps(): void {
+    const query = this.localMapQuery().trim();
+    this.error.set('');
+    this.localMapSearching.set(true);
+    this.api.searchCs2LocalMaps(this.id, query).pipe(finalize(() => this.localMapSearching.set(false))).subscribe({
+      next: result => {
+        this.localMapResults.set(result.items);
+        this.localMapTotal.set(result.total);
+      },
+      error: error => this.error.set(error.error?.detail ?? 'Installed maps could not be scanned.')
+    });
+  }
+
+  activateLocalMap(map: Cs2LocalMap): void {
+    if (map.presetId && map.presetId !== this.selectedPresetId()) {
+      this.selectPreset(map.presetId);
+    }
+    this.modeMapName.set(map.mapName);
+    this.modeWorkshopId.set('');
+    this.localMapActivating.set(map.mapName);
+    this.applyModePreset();
   }
 
   formatWorkshopSize(bytes: number): string {
@@ -822,6 +872,7 @@ export class ServerDetailComponent implements OnDestroy {
     }).pipe(finalize(() => {
       this.modeSaving.set(false);
       this.workshopAdding.set('');
+      this.localMapActivating.set('');
     })).subscribe({
       next: result => {
         this.modeState.set(result.state);

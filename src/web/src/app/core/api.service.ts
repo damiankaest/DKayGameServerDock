@@ -11,6 +11,7 @@ import {
   Cs2BasicConfigurationState,
   Cs2LiveConfigurationApplyResult,
   Cs2LiveControlState,
+  Cs2LocalMapSearchResult,
   Cs2MapChangeState,
   Cs2ModeApplyResult,
   Cs2ModeCatalog,
@@ -124,6 +125,12 @@ export class ApiService {
 
   searchCs2Workshop(id: string, query: string, take = 18): Observable<Cs2WorkshopSearchResult> {
     return this.http.get<Cs2WorkshopSearchResult>(`/api/servers/${id}/cs2-workshop/search`, {
+      params: { query, take },
+    });
+  }
+
+  searchCs2LocalMaps(id: string, query: string, take = 60): Observable<Cs2LocalMapSearchResult> {
+    return this.http.get<Cs2LocalMapSearchResult>(`/api/servers/${id}/cs2-local-maps`, {
       params: { query, take },
     });
   }

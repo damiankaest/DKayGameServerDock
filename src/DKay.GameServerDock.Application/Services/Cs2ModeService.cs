@@ -31,6 +31,16 @@ public sealed class Cs2ModeService(
         return await modes.SearchWorkshopMapsAsync(server, query, Math.Clamp(take ?? 18, 1, 30), cancellationToken);
     }
 
+    public async Task<Cs2LocalMapSearchResult> SearchLocalMapsAsync(
+        Guid serverId,
+        string query,
+        int? take,
+        CancellationToken cancellationToken)
+    {
+        var server = await GetCs2ServerAsync(serverId, cancellationToken);
+        return modes.SearchLocalMaps(server, query, Math.Clamp(take ?? 60, 1, 200));
+    }
+
     public async Task<ConfigureCs2WorkshopKeyResult> ConfigureWorkshopKeyAsync(
         Guid serverId,
         ConfigureCs2WorkshopKeyRequest request,

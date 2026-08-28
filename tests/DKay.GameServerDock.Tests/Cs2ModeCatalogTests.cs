@@ -655,6 +655,62 @@ public sealed class Cs2ModeCatalogTests
         }
     }
 
+    [Theory]
+    [InlineData("kz_cliffside", "kz")]
+    [InlineData("xc_whatever", "kz")]
+    [InlineData("fy_poolparty", "rpg-arena")]
+    [InlineData("aim_redline", "rpg-arena")]
+    [InlineData("awp_india", "rpg-arena")]
+    [InlineData("dm_dust", "rpg-arena")]
+    [InlineData("surf_utopia", "surf")]
+    [InlineData("bhop_easy", "bhop")]
+    [InlineData("de_mirage", "classic")]
+    [InlineData("scoutzknivez_arena", "scoutzknivez")]
+    [InlineData("unknown_custom", null)]
+    [InlineData("", null)]
+    public void ResolvePresetId_maps_map_prefixes_to_the_matching_preset(string mapName, string? expectedPresetId)
+    {
+        Assert.Equal(expectedPresetId, Cs2ModeCatalog.ResolvePresetId(mapName));
+    }
+
+    [Fact]
+    public void SearchLocalMaps_lists_installed_map_files_and_suggests_presets()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"dkay-local-maps-{Guid.NewGuid():N}");
+        var server = CreateServer(root);
+        var mapsRoot = Path.Combine(root, "game", "csgo", "maps");
+        Directory.CreateDirectory(mapsRoot);
+        foreach (var name in new[] { "kz_cliffside.bsp", "fy_poolparty.bsp", "awp_india.vpk", "surf_utopia.bsp", "notes.txt" })
+        {
+            File.WriteAllText(Path.Combine(mapsRoot, name), "map");
+        }
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            var manager = new Cs2ModeManager(httpClient);
+
+            var all = manager.SearchLocalMaps(server, "", 100);
+            Assert.Equal(4, all.Total);
+            Assert.Equal(4, all.Items.Count);
+            Assert.DoesNotContain(all.Items, item => item.MapName == "notes");
+
+            var kzOnly = manager.SearchLocalMaps(server, "kz", 100);
+            var single = Assert.Single(kzOnly.Items);
+            Assert.Equal("kz_cliffside", single.MapName);
+            Assert.Equal("kz", single.PresetId);
+            Assert.Equal("local", single.Source);
+
+            var awp = Assert.Single(manager.SearchLocalMaps(server, "awp", 100).Items);
+            Assert.Equal("awp_india", awp.MapName);
+            Assert.Equal("rpg-arena", awp.PresetId);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string MetamodPath(string root, string fileName) =>
         Path.Combine(root, "game", "csgo", "addons", "metamod", fileName);
 

@@ -104,6 +104,37 @@
             }
           </section>
 
+          <section class="panel full workshop-browser-panel">
+            <header>
+              <div><p class="eyebrow">INSTALLIERTE MAPS</p><h2>Lokale Maps durchsuchen</h2><p>Maps, die bereits unter <code>game/csgo/maps</code> liegen. Das passende Preset wird automatisch erkannt und beim Aktivieren geladen.</p></div>
+              <span class="status" data-status="Running">LOKAL</span>
+            </header>
+            <form class="workshop-search" (submit)="$event.preventDefault(); searchLocalMaps()">
+              <span>⌕</span>
+              <input maxlength="64" placeholder="Nach Map suchen, z. B. kz, fy, awp, aim" [value]="localMapQuery()" (input)="updateLocalMapQuery($event)" />
+              <button class="primary-button" type="submit" [disabled]="localMapSearching()">{{ localMapSearching() ? 'Suchen…' : 'Durchsuchen' }}</button>
+            </form>
+            @if (localMapResults().length) {
+              <div class="workshop-result-grid">
+                @for (map of localMapResults(); track map.mapName) {
+                  <article class="workshop-map-card">
+                    <div class="workshop-map-body">
+                      <h3>{{ map.mapName }}</h3>
+                      <code>{{ presetNameById(map.presetId) }}</code>
+                      <div class="workshop-map-meta"><span>Lokale Datei · game/csgo/maps</span></div>
+                    </div>
+                    <footer>
+                      <button class="primary-button small" type="button" [disabled]="modeSaving() || (current.status !== 'Stopped' && current.status !== 'Crashed' && current.status !== 'Error')" (click)="activateLocalMap(map)">{{ localMapActivating() === map.mapName ? 'Aktivieren…' : 'Aktivieren' }}</button>
+                    </footer>
+                  </article>
+                }
+              </div>
+              @if (localMapTotal() > localMapResults().length) { <p class="readiness-note">Suche eingrenzen — {{ localMapTotal() }} lokale Maps gefunden.</p> }
+            } @else if (!localMapSearching()) {
+              <p class="workshop-download-note">Keine lokalen <code>.bsp</code>/<code>.vpk</code>-Dateien gefunden. Lege Maps in <code>game/csgo/maps</code> ab oder nutze die Workshop-Suche unten.</p>
+            }
+          </section>
+
           @if (modeState()?.workshop; as workshop) {
             <section class="panel full workshop-browser-panel">
               <header>

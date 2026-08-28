@@ -55,6 +55,13 @@ public static class ServerEndpoints
                 Cs2ModeService modes,
                 CancellationToken token) =>
             Results.Ok(await modes.SearchWorkshopMapsAsync(id, query, take, token)));
+        group.MapGet("/{id:guid}/cs2-local-maps", async (
+                Guid id,
+                string query,
+                int? take,
+                Cs2ModeService modes,
+                CancellationToken token) =>
+            Results.Ok(await modes.SearchLocalMapsAsync(id, query, take, token)));
         group.MapPut("/{id:guid}/cs2-workshop/key", async (
                 Guid id,
                 ConfigureCs2WorkshopKeyRequest request,

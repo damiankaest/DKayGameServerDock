@@ -347,6 +347,18 @@ export interface Cs2WorkshopSearchResult {
   items: Cs2WorkshopMap[];
 }
 
+export interface Cs2LocalMap {
+  mapName: string;
+  source: string;
+  presetId: string | null;
+}
+
+export interface Cs2LocalMapSearchResult {
+  query: string;
+  total: number;
+  items: Cs2LocalMap[];
+}
+
 export interface ConfigureCs2WorkshopKeyResult {
   state: Cs2WorkshopAccessState;
   message: string;
