@@ -12,6 +12,12 @@ public sealed record CreateServerRequest(
     int RamLimitMb,
     IReadOnlyDictionary<string, string> Settings);
 
+public sealed record ImportExistingCs2ServerRequest(
+    string Name,
+    string InstallDirectory,
+    int Port,
+    int RamLimitMb);
+
 public sealed record UpdateServerRequest(
     string Name,
     int RamLimitMb,

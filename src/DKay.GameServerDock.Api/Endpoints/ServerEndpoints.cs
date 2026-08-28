@@ -30,6 +30,7 @@ public static class ServerEndpoints
 
         var group = endpoints.MapGroup("/api/servers");
         group.MapGet("/", ListAsync);
+        group.MapPost("/import-cs2", ImportExistingCs2Async);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPost("/", CreateAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
@@ -96,6 +97,17 @@ public static class ServerEndpoints
                 Cs2LiveControlService controls,
                 CancellationToken token) =>
             Results.Ok(await controls.ConfigureGsltAsync(id, request, token)));
+        group.MapGet("/{id:guid}/basic-config", async (
+                Guid id,
+                Cs2BasicControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.GetAsync(id, token)));
+        group.MapPut("/{id:guid}/basic-config", async (
+                Guid id,
+                SaveCs2BasicConfigurationRequest request,
+                Cs2BasicControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.SaveAsync(id, request, token)));
         group.MapPost("/{id:guid}/command", SendCommandAsync);
         group.MapPost("/{id:guid}/self-test", async (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
             Results.Ok(await orchestrator.TestCommandChannelAsync(id, token)));
@@ -140,6 +152,20 @@ public static class ServerEndpoints
         var server = await orchestrator.CreateAsync(request, cancellationToken);
         await queue.EnqueueAsync(new ServerWorkItem(server.Id, ServerWorkKind.Install), cancellationToken);
         return Results.Accepted(
+            $"/api/servers/{server.Id}",
+            ToResponse(server, new ProcessSnapshot(false, null, null, null, null, 0, 0), modules, dockOptions));
+    }
+
+    private static async Task<IResult> ImportExistingCs2Async(
+        ImportExistingCs2ServerRequest request,
+        ServerOrchestrator orchestrator,
+        IExistingCs2InstallationValidator installationValidator,
+        IGameModuleRegistry modules,
+        DockOptions dockOptions,
+        CancellationToken cancellationToken)
+    {
+        var server = await orchestrator.ImportExistingCs2Async(request, installationValidator, cancellationToken);
+        return Results.Created(
             $"/api/servers/{server.Id}",
             ToResponse(server, new ProcessSnapshot(false, null, null, null, null, 0, 0), modules, dockOptions));
     }
@@ -296,6 +322,7 @@ public static class ServerEndpoints
             CurrentMap = currentMap,
             Capabilities = module.Descriptor.Capabilities.ToString(),
             NetworkProtocols = module.Descriptor.NetworkProtocols,
+            ExternalInstallation = ServerPublicationSettings.IsExternalInstallation(server),
             Publication = ToPublicationResponse(ServerPublicationSettings.Read(server), dockOptions)
         };
     }

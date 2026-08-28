@@ -65,6 +65,7 @@ export interface GameServer {
   currentMap: string | null;
   capabilities: string;
   networkProtocols: string[];
+  externalInstallation: boolean;
   publication: ServerPublication;
 }
 
@@ -193,6 +194,21 @@ export interface ConsoleCommandResult {
   output: string | null;
 }
 
+export interface Cs2BasicConfiguration {
+  autoBhop: boolean;
+  gravity: number;
+  botQuota: number;
+}
+
+export interface Cs2BasicConfigurationState {
+  configuration: Cs2BasicConfiguration;
+  running: boolean;
+  appliedLive: boolean;
+  message: string;
+  observedValues: Record<string, string>;
+  output: string | null;
+}
+
 export interface ServerSelfTestResult {
   passed: boolean;
   transport: string;
@@ -212,6 +228,13 @@ export interface CreateServerRequest {
   rconPort: number | null;
   ramLimitMb: number;
   settings: Record<string, string>;
+}
+
+export interface ImportExistingCs2ServerRequest {
+  name: string;
+  installDirectory: string;
+  port: number;
+  ramLimitMb: number;
 }
 
 export interface Cs2ConVar {

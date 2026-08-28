@@ -30,11 +30,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ServerOrchestrator>();
         services.AddScoped<Cs2ModeService>();
         services.AddScoped<Cs2LiveControlService>();
+        services.AddScoped<Cs2BasicControlService>();
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IHostMetricsProvider, HostMetricsProvider>();
         services.AddSingleton<IHostReadinessProvider, HostReadinessProvider>();
         services.AddSingleton<IPathPolicy>(_ => new PathPolicy(options.ServersRoot));
+        services.AddSingleton<IExistingCs2InstallationValidator, ExistingCs2InstallationValidator>();
         services.AddSingleton<IServerWorkQueue, ServerWorkQueue>();
         services.AddSingleton<IServerRuntimeStateStore, ServerRuntimeStateStore>();
         services.AddSingleton<IProcessSupervisor, ManagedProcessSupervisor>();
@@ -42,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new HttpClient());
         services.AddSingleton<PaperInstaller>();
         services.AddSingleton<Cs2RuntimeProvisioner>();
+        services.AddSingleton<ICs2BasicConfigStore, Cs2BasicConfigStore>();
         services.AddSingleton<ICs2RuntimeControlStore>(provider =>
             provider.GetRequiredService<Cs2RuntimeProvisioner>());
         services.AddSingleton<Cs2RconClient>();

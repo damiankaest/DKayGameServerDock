@@ -323,7 +323,8 @@ public sealed class Cs2RuntimeProvisioner(DockOptions options) : ICs2RuntimeCont
             $"host_workshop_map {publishedFileId}{Environment.NewLine}" +
             "exec dkay-server.cfg" + Environment.NewLine +
             "exec dkay-combat.cfg" + Environment.NewLine +
-            "exec dkay-live.cfg" + Environment.NewLine);
+            "exec dkay-live.cfg" + Environment.NewLine +
+            "exec dkay-basic.cfg" + Environment.NewLine);
     }
 
     public string GetRconPassword(GameServerInstance server)

@@ -28,6 +28,11 @@ public interface IPathPolicy
     string ValidateServerDirectory(string path);
 }
 
+public interface IExistingCs2InstallationValidator
+{
+    string Validate(string installDirectory);
+}
+
 public interface IServerEventSink
 {
     Task RecordAsync(ServerEvent serverEvent, CancellationToken cancellationToken);
