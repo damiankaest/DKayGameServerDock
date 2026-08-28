@@ -382,6 +382,10 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.actions.find(action => action.id === 'repair-team-damage') ?? null;
   }
 
+  reapplyPolicyAction(): Cs2QuickAction | null {
+    return this.liveControl()?.actions.find(action => action.id === 'reapply-policy') ?? null;
+  }
+
   selectActionGroup(group: string): void {
     this.activeActionGroup.set(group);
   }
@@ -420,6 +424,7 @@ export class ServerDetailComponent implements OnDestroy {
     return this.liveControl()?.actions.filter(action =>
       !action.id.startsWith('combat-') &&
       action.id !== 'repair-team-damage' &&
+      action.id !== 'reapply-policy' &&
       !['enable-bhop', 'disable-bhop', 'respawn-round', 'respawn-instant', 'hud-hidden', 'hud-timer', 'hud-movement', 'practice-disabled', 'practice-ground', 'practice-anywhere'].includes(action.id)) ?? [];
   }
 
@@ -515,15 +520,15 @@ export class ServerDetailComponent implements OnDestroy {
 
   liveSummaryValue(kind: 'map' | 'profile' | 'players' | 'bots' | 'combat' | 'respawn' | 'movement' | 'hud' | 'practice'): string {
     const values = this.liveObservedValues();
-    if (kind === 'map') return this.server()?.currentMap || 'Not reported';
-    if (kind === 'profile') return this.activeModeProfile()?.presetName || 'No profile';
+    if (kind === 'map') return this.server()?.currentMap || 'Nicht gemeldet';
+    if (kind === 'profile') return this.activeModeProfile()?.presetName || 'Kein Profil';
     if (kind === 'players') return String(this.server()?.players.length ?? 0);
-    if (kind === 'bots') return `${values['bot_quota'] ?? '—'} · level ${values['bot_difficulty'] ?? '—'}`;
-    if (kind === 'combat') return this.activeCombatMode() === 'ffa' ? 'Enemy + team damage' : this.activeCombatMode() === 'peaceful' ? 'All damage off' : 'Enemy damage only';
-    if (kind === 'respawn') return this.activeRespawnMode() === 'instant' ? 'Instant' : this.activeRespawnMode() === 'round' ? 'Round based' : 'Mixed';
-    if (kind === 'movement') return this.activeBhopMode() === 'enabled' ? 'Auto-bhop on' : this.activeBhopMode() === 'disabled' ? 'Normal jumping' : 'Custom';
-    if (kind === 'practice') return this.activeModeProfile()?.presetId === 'kz' ? 'Native CS2KZ' : this.activePracticeMode() === 'anywhere' ? 'Air checkpoints' : this.activePracticeMode() === 'ground' ? 'Ground checkpoints' : 'Timer only';
-    return this.activeHudMode() === 'hidden' ? 'Clean' : this.activeHudMode() === 'timer' ? 'Timer only' : 'Movement HUD';
+    if (kind === 'bots') return `${values['bot_quota'] ?? '—'} · Stufe ${values['bot_difficulty'] ?? '—'}`;
+    if (kind === 'combat') return this.activeCombatMode() === 'ffa' ? 'Gegner + Team-Schaden' : this.activeCombatMode() === 'peaceful' ? 'Kein Schaden' : 'Nur Gegner-Schaden';
+    if (kind === 'respawn') return this.activeRespawnMode() === 'instant' ? 'Sofort' : this.activeRespawnMode() === 'round' ? 'Rundenbasiert' : 'Gemischt';
+    if (kind === 'movement') return this.activeBhopMode() === 'enabled' ? 'Auto-Bhop an' : this.activeBhopMode() === 'disabled' ? 'Normales Springen' : 'Eigene Werte';
+    if (kind === 'practice') return this.activeModeProfile()?.presetId === 'kz' ? 'CS2KZ (nativ)' : this.activePracticeMode() === 'anywhere' ? 'Checkpoints in der Luft' : this.activePracticeMode() === 'ground' ? 'Checkpoints am Boden' : 'Nur Timer';
+    return this.activeHudMode() === 'hidden' ? 'Leer' : this.activeHudMode() === 'timer' ? 'Nur Timer' : 'Movement-HUD';
   }
 
   openLiveGroup(group: string): void {
@@ -588,6 +593,14 @@ export class ServerDetailComponent implements OnDestroy {
 
   selectedPreset(): Cs2ModePreset | null {
     return this.modeCatalog()?.presets.find(preset => preset.id === this.selectedPresetId()) ?? null;
+  }
+
+  movementPresets(): Cs2ModePreset[] {
+    return this.modeCatalog()?.presets.filter(preset => ['surf', 'kz', 'bhop'].includes(preset.id)) ?? [];
+  }
+
+  combatPresets(): Cs2ModePreset[] {
+    return this.modeCatalog()?.presets.filter(preset => ['classic', 'scoutzknivez', 'rpg-arena'].includes(preset.id)) ?? [];
   }
 
   activeModeProfile(): Cs2ModeProfile | null {

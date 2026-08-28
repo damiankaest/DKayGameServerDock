@@ -98,8 +98,8 @@ public static partial class Cs2ModeCatalog
                 Fixed("mp_respawn_on_death_ct", "1", "Respawn Counter-Terrorists after a failed climb."),
                 Fixed("mp_respawn_immunitytime", "0", "Do not retain combat immunity on climb maps."),
                 Fixed("mp_ignore_round_win_conditions", "1", "Do not end active climbs on normal win conditions."),
-                Fixed("sv_enablebunnyhopping", "1", "Bunny hopping enabled."),
-                Fixed("sv_autobunnyhopping", "0", "Jump timing remains manual.")
+                Boolean("sv_enablebunnyhopping", "Bunny hopping", "1", "Bunny hopping enabled."),
+                Boolean("sv_autobunnyhopping", "Automatic hopping", "0", "Hold jump to keep hopping.")
             ],
             "peaceful",
             "standard",

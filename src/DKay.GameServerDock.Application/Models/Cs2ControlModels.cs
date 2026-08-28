@@ -77,3 +77,13 @@ public sealed record ConfigureCs2GsltResult(
     bool AppliedLive,
     string Message,
     string? Output);
+
+public static class Cs2RuntimePolicy
+{
+    /// <summary>
+    /// Console command that re-applies the administrator's authoritative runtime layers
+    /// (global combat/respawn policy plus the saved live values) without restarting the round.
+    /// Run it after plugins have finished loading so it outranks plugin defaults.
+    /// </summary>
+    public const string ReapplyCommand = "exec dkay-combat.cfg; exec dkay-live.cfg";
+}

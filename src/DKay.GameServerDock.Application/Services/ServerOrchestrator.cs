@@ -177,6 +177,13 @@ public sealed class ServerOrchestrator(
             await events.RecordAsync(
                 ServerEvent.Create(server.Id, ServerEventType.ServerStarted, $"Server started with process ID {snapshot.ProcessId}.", clock.UtcNow),
                 cancellationToken);
+
+            var reapplyCommand = module.Adapter.PolicyReapplyCommand;
+            if (!string.IsNullOrWhiteSpace(reapplyCommand))
+            {
+                _ = ReapplyPolicyAfterWarmupAsync(server, module.Adapter, reapplyCommand, processes, events, clock);
+            }
+
             return snapshot;
         }
         catch (Exception exception)
@@ -186,6 +193,36 @@ public sealed class ServerOrchestrator(
                 ServerEvent.Create(server.Id, ServerEventType.ServerStartProgress, $"Start failed: {exception.Message}", clock.UtcNow),
                 cancellationToken);
             throw;
+        }
+    }
+
+    private static async Task ReapplyPolicyAfterWarmupAsync(
+        GameServerInstance server,
+        IGameServerAdapter adapter,
+        string command,
+        IProcessSupervisor processes,
+        IServerEventSink events,
+        IClock clock)
+    {
+        try
+        {
+            // Metamod and CounterStrikeSharp plugins load during map load and apply their own
+            // ConVars after the launch +exec chain. Wait for them to settle, then re-assert the
+            // administrator's saved policy so it outranks plugin defaults.
+            await Task.Delay(TimeSpan.FromSeconds(20));
+            await adapter.ExecuteConsoleCommandAsync(server, processes, command, CancellationToken.None);
+            await events.RecordAsync(
+                ServerEvent.Create(
+                    server.Id,
+                    ServerEventType.ConfigurationChanged,
+                    "Reapplied the saved policy after plugin warmup.",
+                    clock.UtcNow),
+                CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Best effort. The launch +exec chain already applied the values once, and the
+            // administrator can reapply manually from Live control.
         }
     }
 

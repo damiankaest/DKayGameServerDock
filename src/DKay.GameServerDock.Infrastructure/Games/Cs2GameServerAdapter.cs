@@ -14,6 +14,7 @@ public sealed partial class Cs2GameServerAdapter(Cs2RconClient rcon) : IGameServ
 
     public string GracefulStopCommand => "quit";
     public bool HandlesCommandsExternally => true;
+    public string? PolicyReapplyCommand => Cs2RuntimePolicy.ReapplyCommand;
 
     public async Task<IReadOnlyList<PlayerInfo>> GetPlayersAsync(
         GameServerInstance server,

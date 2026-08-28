@@ -4,13 +4,26 @@
 
   @if (server(); as current) {
     <header class="server-detail-header">
-      <div class="server-title"><span class="game-icon xlarge">{{ current.templateIcon }}</span><div><p class="eyebrow">{{ current.templateName }}</p><h1>{{ current.name }}</h1><p class="muted">LAN :{{ current.port }} · PID {{ current.process.processId || '—' }}</p></div></div>
+      <div class="server-title"><span class="game-icon xlarge">{{ current.templateIcon }}</span><div><p class="eyebrow">{{ current.templateName }}</p><h1>{{ current.name }}</h1><p class="muted">Port {{ current.port }} · PID {{ current.process.processId || '—' }}</p></div></div>
       <div class="detail-actions"><span class="status large" [attr.data-status]="current.status">{{ current.status }}</span>
-        @if (current.status === 'Running') { <button class="secondary-button" [disabled]="actioning() !== ''" (click)="action('restart')">{{ actioning() === 'restart' ? 'Restarting…' : '↻ Restart' }}</button><button class="danger-button" [disabled]="actioning() !== ''" (click)="action('stop')">{{ actioning() === 'stop' ? 'Stopping…' : '■ Stop' }}</button> }
-        @else if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starting…' : '▶ Start' }}</button> }
-        @if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="danger-button" [disabled]="actioning() !== ''" (click)="deleteServer()">{{ actioning() === 'delete' ? 'Deleting…' : 'Delete' }}</button> }
+        @if (current.status === 'Running') { <button class="secondary-button" [disabled]="actioning() !== ''" (click)="action('restart')">{{ actioning() === 'restart' ? 'Neustart…' : '↻ Neustart' }}</button><button class="danger-button" [disabled]="actioning() !== ''" (click)="action('stop')">{{ actioning() === 'stop' ? 'Stoppe…' : '■ Stopp' }}</button> }
+        @else if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="primary-button" [disabled]="actioning() !== ''" (click)="action('start')">{{ actioning() === 'start' ? 'Starte…' : '▶ Start' }}</button> }
+        @if (current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error') { <button class="ghost-button" [disabled]="actioning() !== ''" (click)="deleteServer()">{{ actioning() === 'delete' ? 'Lösche…' : 'Löschen' }}</button> }
       </div>
     </header>
+
+    <section class="connect-strip">
+      <div class="connect-head"><span class="game-icon large">⌁</span><div><strong>Verbinden</strong><small>Im CS2-Client oder in der Konsole: <code>connect &lt;adresse&gt;</code></small></div></div>
+      @if (current.publication.address) {
+        <button class="connect-copy" type="button" (click)="copy(current.publication.address!)">
+          <small>JOIN-ADRESSE</small>
+          <code>{{ current.publication.address }}</code>
+          <b>{{ copied() === current.publication.address ? 'Kopiert ✓' : 'Kopieren' }}</b>
+        </button>
+      } @else {
+        <p class="readiness-note connect-note">Keine öffentliche Adresse konfiguriert. Für Zugriff von außen <code>DGS_PUBLIC_HOST</code> setzen (z. B. deine myfritz-Adresse). Im LAN verbindest du dich über die IP des Server-PCs mit Port <b>{{ current.port }}</b>.</p>
+      }
+    </section>
 
     @if (current.lastError) { <p class="error-banner"><strong>Last operation failed:</strong> {{ current.lastError }}</p> }
 
@@ -18,7 +31,7 @@
       <section class="install-banner"><div><strong>{{ progress()?.message || 'Preparing installation…' }}</strong><small>{{ progress()?.stage || current.status }}</small></div><b>{{ progress()?.percent || 0 }}%</b><div class="meter"><i [style.width.%]="progress()?.percent || 0"></i></div></section>
     }
 
-    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="selectTab('overview')">Overview</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'control'" (click)="selectTab('control')">Live control</button><button [class.active]="tab() === 'modes'" (click)="selectTab('modes')">Modes & maps</button> }<button [class.active]="tab() === 'console'" (click)="selectTab('console')">Console</button><button [class.active]="tab() === 'players'" (click)="selectTab('players')">Players <i>{{ current.players.length }}</i></button></nav>
+    <nav class="tab-bar"><button [class.active]="tab() === 'overview'" (click)="selectTab('overview')">Übersicht</button>@if (current.templateId === 'counter-strike-2') { <button [class.active]="tab() === 'modes'" (click)="selectTab('modes')">Spielmodus</button><button [class.active]="tab() === 'control'" (click)="selectTab('control')">Live</button> }<button [class.active]="tab() === 'console'" (click)="selectTab('console')">Konsole</button><button [class.active]="tab() === 'players'" (click)="selectTab('players')">Spieler <i>{{ current.players.length }}</i></button></nav>
 
     @if (tab() === 'overview') {
       <div class="detail-grid">
@@ -57,8 +70,8 @@
     } @else if (tab() === 'modes') {
       <div class="mode-workbench">
         <section class="panel full mode-intro">
-          <header><div><p class="eyebrow">CS2 MODE WORKBENCH</p><h2>Map presets & managed mods</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Ready to configure' : 'Stop required' }}</span></header>
-          <p>Presets define how a map starts after activation or a map change. They are the reusable blueprint—not a claim about what CS2 is running right now. Open <button type="button" class="inline-link-button" (click)="selectTab('control')">Live control</button> to inspect and change the current server without editing the map blueprint.</p>
+          <header><div><p class="eyebrow">SPIELMODUS</p><h2>Bewegung oder Kampf?</h2></div><span class="status" [attr.data-status]="current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Running' : 'Stopped'">{{ current.status === 'Stopped' || current.status === 'Crashed' || current.status === 'Error' ? 'Bereit' : 'Server stoppen' }}</span></header>
+          <p><b>Bewegung</b> (Surf · Bhop · KZ) = Timer, Checkpoints und Movement-Physik, ohne Schaden. <b>Kampf</b> (Classic · ScoutzKnivez · RPG) = echte Runden mit Gegnern, Schaden und Economy. Wähle unten einen Stil und eine Map. Läuft der Server gerade, änderst du die Werte im Tab <button type="button" class="inline-link-button" (click)="selectTab('control')">Live</button>.</p>
         </section>
 
         @if (current.status === 'Running' && activeModeProfile()?.workshopId && activeModeProfile()?.workshopInstallState !== 'installed' && !isProfileLive(activeModeProfile())) {
@@ -71,9 +84,19 @@
           <p class="publication-warning full"><b>The process is running, but no active map is being reported.</b> A public join can still time out or land on an empty level. Run the command-channel self-test and inspect the first Workshop/download messages in Console.</p>
         }
 
-        @if (modeCatalog(); as catalog) {
+        @if (modeCatalog()) {
+          <div class="mode-category"><h3>Bewegung</h3><small>Surf · Bhop · KZ — Timer, Checkpoints &amp; Movement</small></div>
           <section class="preset-grid">
-            @for (preset of catalog.presets; track preset.id) {
+            @for (preset of movementPresets(); track preset.id) {
+              <button type="button" class="preset-card" [class.selected]="selectedPresetId() === preset.id" (click)="selectPreset(preset.id)">
+                <span>{{ preset.icon }}</span><small>{{ preset.category }}</small><strong>{{ preset.name }}</strong><p>{{ preset.description }}</p>
+                <code>{{ preset.mapPrefixes.join(' · ') }}</code>
+              </button>
+            }
+          </section>
+          <div class="mode-category"><h3>Kampf</h3><small>Classic · ScoutzKnivez · RPG — Runden, Schaden &amp; Economy</small></div>
+          <section class="preset-grid">
+            @for (preset of combatPresets(); track preset.id) {
               <button type="button" class="preset-card" [class.selected]="selectedPresetId() === preset.id" (click)="selectPreset(preset.id)">
                 <span>{{ preset.icon }}</span><small>{{ preset.category }}</small><strong>{{ preset.name }}</strong><p>{{ preset.description }}</p>
                 <code>{{ preset.mapPrefixes.join(' · ') }}</code>
@@ -246,13 +269,16 @@
       <div class="live-control-workbench">
         <section class="panel full live-control-hero">
           <div>
-            <p class="eyebrow">MATCH DIRECTOR</p>
-            <h2>Control the running server without memorizing console commands</h2>
-            <p>Round flow, bots, movement and private practice settings are applied through the protected local RCON channel.</p>
+            <p class="eyebrow">LIVE-STEUERUNG</p>
+            <h2>So soll der Server jetzt laufen</h2>
+            <p><b>Bewegung</b> (Bhop, Gravity, Airaccelerate) gilt auf jeder Map. <b>Kampf</b> (Schaden, Runden) gilt auf normalen Maps. Änderungen wirken sofort über den geschützten RCON-Kanal.</p>
           </div>
           <div class="live-control-status">
             <span class="status" [attr.data-status]="current.status">{{ current.status }}</span>
-            <button class="secondary-button small" type="button" [disabled]="liveLoading() || liveSaving() || liveAction() !== ''" (click)="loadCs2Control()">{{ liveLoading() ? 'Reading…' : '↻ Refresh live values' }}</button>
+            <button class="secondary-button small" type="button" [disabled]="liveLoading() || liveSaving() || liveAction() !== ''" (click)="loadCs2Control()">{{ liveLoading() ? 'Lese…' : '↻ Werte neu lesen' }}</button>
+            @if (reapplyPolicyAction(); as reapply) {
+              <button class="secondary-button small" type="button" [disabled]="!liveControl()?.running || liveAction() !== ''" (click)="runLiveAction(reapply)">{{ liveAction() === reapply.id ? 'Wende an…' : '↻ Gespeicherte Werte anwenden' }}</button>
+            }
           </div>
         </section>
 
@@ -264,22 +290,22 @@
           <div class="skeleton-block tall full"></div>
         } @else if (liveControl(); as control) {
           <section class="panel full live-now-panel">
-            <header><div><p class="eyebrow">CURRENT SERVER</p><h2>What is active right now</h2><p>Every green value was read from the running CS2 process. Select a card to change its detailed settings.</p></div><div class="live-now-drift" [class.clean]="livePresetDriftCount() === 0"><strong>{{ livePresetDriftCount() }}</strong><span>different from<br />map preset</span></div></header>
+            <header><div><p class="eyebrow">JETZT AKTIV</p><h2>Was gerade läuft</h2><p>Grüne Werte wurden live aus dem laufenden CS2 gelesen. Karte anklicken, um die Details zu ändern.</p></div><div class="live-now-drift" [class.clean]="livePresetDriftCount() === 0"><strong>{{ livePresetDriftCount() }}</strong><span>weichen vom<br />Preset ab</span></div></header>
             <div class="live-now-grid">
-              <article><span>MAP</span><small>Currently loaded</small><strong>{{ liveSummaryValue('map') }}</strong><em>{{ liveSummaryValue('profile') }} blueprint</em></article>
-              <button type="button" (click)="openLiveGroup('Teams & players')"><span>VS</span><small>Player damage</small><strong>{{ liveSummaryValue('combat') }}</strong><em>{{ livePolicyObserved('combat') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
-              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>∞</span><small>Death flow</small><strong>{{ liveSummaryValue('respawn') }}</strong><em>{{ livePolicyObserved('respawn') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
-              <button type="button" (click)="openLiveGroup('Movement & physics')"><span>↗</span><small>Movement</small><strong>{{ liveSummaryValue('movement') }}</strong><em>{{ livePolicyObserved('bhop') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
-              <button type="button" (click)="openLiveGroup('Bots')"><span>BOT</span><small>Quota · difficulty</small><strong>{{ liveSummaryValue('bots') }}</strong><em>{{ isLiveSettingObserved('bot_quota') ? 'Live from CS2' : 'Saved fallback' }}</em></button>
-              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>HUD</span><small>Player display</small><strong>{{ liveSummaryValue('hud') }}</strong><em>{{ livePolicyObserved('hud') ? 'Live from SharpTimer' : 'Saved fallback' }}</em></button>
-              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>CP</span><small>In-game practice</small><strong>{{ liveSummaryValue('practice') }}</strong><em>{{ activeModeProfile()?.presetId === 'kz' ? 'Managed inside CS2' : livePolicyObserved('practice') ? 'Live from SharpTimer' : 'Saved fallback' }}</em></button>
+              <article><span>MAP</span><small>Aktuell geladen</small><strong>{{ liveSummaryValue('map') }}</strong><em>{{ liveSummaryValue('profile') }}</em></article>
+              <button type="button" (click)="openLiveGroup('Teams & players')"><span>VS</span><small>Kampf · Schaden</small><strong>{{ liveSummaryValue('combat') }}</strong><em>{{ livePolicyObserved('combat') ? 'Live aus CS2' : 'Gespeichert' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>∞</span><small>Respawn</small><strong>{{ liveSummaryValue('respawn') }}</strong><em>{{ livePolicyObserved('respawn') ? 'Live aus CS2' : 'Gespeichert' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Movement & physics')"><span>↗</span><small>Bewegung · Bhop</small><strong>{{ liveSummaryValue('movement') }}</strong><em>{{ livePolicyObserved('bhop') ? 'Live aus CS2' : 'Gespeichert' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Bots')"><span>BOT</span><small>Anzahl · Stufe</small><strong>{{ liveSummaryValue('bots') }}</strong><em>{{ isLiveSettingObserved('bot_quota') ? 'Live aus CS2' : 'Gespeichert' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>HUD</span><small>Anzeige</small><strong>{{ liveSummaryValue('hud') }}</strong><em>{{ livePolicyObserved('hud') ? 'Live aus SharpTimer' : 'Gespeichert' }}</em></button>
+              <button type="button" (click)="openLiveGroup('Practice & respawn')"><span>CP</span><small>Checkpoints</small><strong>{{ liveSummaryValue('practice') }}</strong><em>{{ activeModeProfile()?.presetId === 'kz' ? 'Von CS2KZ verwaltet' : livePolicyObserved('practice') ? 'Live aus SharpTimer' : 'Gespeichert' }}</em></button>
             </div>
           </section>
 
           <section class="panel full live-combat-panel">
             <header>
-              <div><p class="eyebrow">GLOBAL DAMAGE CONTROL</p><h2>Enemy and team damage</h2><p>These switches outrank every preset, Workshop map and SharpTimer map config. Changes apply to the running round and survive map changes.</p></div>
-              <div class="live-mode-state"><span class="live-mode-badge">ENEMY {{ enemyDamageEnabled() ? 'ON' : 'OFF' }} · TEAM {{ teamDamageEnabled() ? 'ON' : 'OFF' }}</span><small [attr.data-source]="control.combatOverrideActive ? 'live' : 'saved'">{{ control.combatOverrideActive ? '● GLOBAL ADMIN OVERRIDE' : '○ PRESET DEFAULT' }}</small></div>
+              <div><p class="eyebrow">KAMPF</p><h2>Schaden &amp; Runden</h2><p>Diese Schalter gelten auf normalen Kampf-Maps. Sie übersteuern jedes Preset, jede Workshop-Map und SharpTimer. Änderungen wirken sofort und überleben Map-Wechsel.</p></div>
+              <div class="live-mode-state"><span class="live-mode-badge">GEGNER {{ enemyDamageEnabled() ? 'AN' : 'AUS' }} · TEAM {{ teamDamageEnabled() ? 'AN' : 'AUS' }}</span><small [attr.data-source]="control.combatOverrideActive ? 'live' : 'saved'">{{ control.combatOverrideActive ? '● GLOBALER ADMIN-WERT' : '○ PRESET-STANDARD' }}</small></div>
             </header>
             <div class="combat-mode-selector" role="group" aria-label="Live combat mode">
               @for (action of combatActions(); track action.id) {
@@ -290,26 +316,26 @@
                   (click)="runLiveAction(action)">
                   <span>{{ liveAction() === action.id ? '…' : action.icon }}</span>
                   <div><strong>{{ action.label }}</strong><small>{{ action.description }}</small></div>
-                  @if (isCombatActionActive(action.id)) { <b>ACTIVE</b> }
+                  @if (isCombatActionActive(action.id)) { <b>AKTIV</b> }
                 </button>
               }
             </div>
             <footer>
-              <span>Turning team damage on also enables enemy damage. Turning enemy damage off safely blocks all player damage.</span>
+              <span>Team-Schaden an schaltet auch Gegner-Schaden ein. Gegner-Schaden aus blockiert sicher jeden Spieler-Schaden.</span>
               @if (repairCombatAction(); as repair) {
-                <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Forcing…' : '↻ Force current policy now' }}</button>
+                <button class="ghost-button small" type="button" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(repair)">{{ liveAction() === repair.id ? 'Wende an…' : '↻ Schadens-Regel jetzt anwenden' }}</button>
               }
             </footer>
           </section>
 
           <section class="panel full live-policy-panel">
             <header>
-              <div><p class="eyebrow">LIVE GAMEPLAY</p><h2>Movement, respawn and screen</h2><p>These switches show the values currently reported by CS2 and SharpTimer—not just the selected preset.</p></div>
-              <button class="ghost-button small" type="button" [disabled]="liveLoading() || liveAction() !== ''" (click)="loadCs2Control()">↻ Read actual state</button>
+              <div><p class="eyebrow">BEWEGUNG &amp; TIMER</p><h2>Bhop, Respawn und Anzeige</h2><p>Diese Schalter zeigen die Werte, die CS2 und SharpTimer gerade melden – nicht nur das gewählte Preset.</p></div>
+              <button class="ghost-button small" type="button" [disabled]="liveLoading() || liveAction() !== ''" (click)="loadCs2Control()">↻ Aktuellen Zustand lesen</button>
             </header>
             <div class="live-policy-grid">
               <article [class.saved-state]="!livePolicyObserved('bhop')">
-                <div class="live-policy-heading"><span>↗</span><div><strong>Automatic bunnyhop</strong><small>Hold jump to hop continuously.</small></div><b [class.warning]="activeBhopMode() === 'mixed' || !livePolicyObserved('bhop')">{{ activeBhopMode() === 'enabled' ? 'ON' : activeBhopMode() === 'disabled' ? 'OFF' : 'MIXED' }} · {{ livePolicyObserved('bhop') ? 'LIVE' : 'SAVED' }}</b></div>
+                <div class="live-policy-heading"><span>↗</span><div><strong>Auto-Bhop</strong><small>Spring gedrückt halten = durchgehend hoppen.</small></div><b [class.warning]="activeBhopMode() === 'mixed' || !livePolicyObserved('bhop')">{{ activeBhopMode() === 'enabled' ? 'AN' : activeBhopMode() === 'disabled' ? 'AUS' : 'GEMISCHT' }} · {{ livePolicyObserved('bhop') ? 'LIVE' : 'GESPEICHERT' }}</b></div>
                 <div class="live-policy-options" role="group" aria-label="Automatic bunnyhop">
                   @for (action of policyActions('bhop'); track action.id) {
                     <button type="button" [class.selected]="(livePolicyObserved('bhop') || !control.running) && isPolicyActionActive(action.id)" [disabled]="!control.running || liveAction() !== ''" (click)="runLiveAction(action)">
@@ -317,6 +343,7 @@
                     </button>
                   }
                 </div>
+                <small class="live-policy-note">Gilt auf <b>jeder</b> Map – auch auf normalen Kampf-Maps. Auf KZ-Maps setzt CS2KZ den Wert jedoch zurück.</small>
               </article>
               <article [class.saved-state]="!livePolicyObserved('respawn')">
                 <div class="live-policy-heading"><span>∞</span><div><strong>Death & round flow</strong><small>Choose whether elimination matters.</small></div><b [class.warning]="activeRespawnMode() === 'mixed' || !livePolicyObserved('respawn')">{{ activeRespawnMode() === 'instant' ? 'INSTANT' : activeRespawnMode() === 'round' ? 'ROUND' : 'MIXED' }} · {{ livePolicyObserved('respawn') ? 'LIVE' : 'SAVED' }}</b></div>

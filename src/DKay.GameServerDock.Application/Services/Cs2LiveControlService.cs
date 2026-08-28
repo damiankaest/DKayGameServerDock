@@ -45,7 +45,8 @@ public sealed partial class Cs2LiveControlService(
         new("practice-disabled", "Timer only", "Keep timer and rankings active, but disable player checkpoint commands.", "Practice", "T", RequiresPlugin: true),
         new("practice-ground", "Ground checkpoints", "Allow !cp and !tp while keeping SharpTimer's safe checkpoint restrictions.", "Practice", "CP", RequiresPlugin: true),
         new("practice-anywhere", "Surf practice", "Allow in-air checkpoints that preserve the player's current speed.", "Practice", "AIR", RequiresPlugin: true),
-        new("rtv", "Start RTV vote", "Ask a compatible CounterStrikeSharp map-vote plugin to start RTV.", "Maps", "☑", RequiresPlugin: true)
+        new("rtv", "Start RTV vote", "Ask a compatible CounterStrikeSharp map-vote plugin to start RTV.", "Maps", "☑", RequiresPlugin: true),
+        new("reapply-policy", "Reapply saved settings", "Reapply the saved combat, movement, bot and practice policy after a plugin or map changed it.", "Policy", "↻", "primary")
     ];
 
     private static readonly IReadOnlyDictionary<string, string> ActionCommands =
@@ -66,7 +67,8 @@ public sealed partial class Cs2LiveControlService(
             ["release-bots"] = "bot_stop 0",
             ["enable-bhop"] = "sv_enablebunnyhopping 1; sv_autobunnyhopping 1",
             ["disable-bhop"] = "sv_autobunnyhopping 0; sv_enablebunnyhopping 0",
-            ["rtv"] = "css_rtv"
+            ["rtv"] = "css_rtv",
+            ["reapply-policy"] = Cs2RuntimePolicy.ReapplyCommand
         };
 
     private static readonly string[] CombatLiveKeys =
