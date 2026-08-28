@@ -9,6 +9,7 @@ public sealed class Cs2GameModule(
     Cs2Installer installer,
     ICs2ModeManager modes,
     Cs2RuntimeProvisioner runtime,
+    ICs2BasicConfigStore basicConfig,
     Cs2RconClient rcon) : IGameModule
 {
     public GameTemplateDescriptor Descriptor { get; } = new(
@@ -37,6 +38,7 @@ public sealed class Cs2GameModule(
     public ServerLaunchSpec BuildLaunchSpec(GameServerInstance server)
     {
         runtime.Prepare(server);
+        basicConfig.Prepare(server);
         var settings = GameSettings.Read(server);
         var activeProfile = modes.GetActiveProfile(server);
         var executable = OperatingSystem.IsWindows()
@@ -81,6 +83,11 @@ public sealed class Cs2GameModule(
             arguments.Add("+exec");
             arguments.Add("dkay-live.cfg");
         }
+
+        // The deliberately small Basic Control layer is loaded last. It currently owns only
+        // auto-bhop, gravity and bot quota, so these values remain easy to reason about.
+        arguments.Add("+exec");
+        arguments.Add("dkay-basic.cfg");
 
         return new ServerLaunchSpec(
             executable,

@@ -1144,6 +1144,7 @@ public sealed partial class Cs2ModeManager : ICs2ModeManager
         lines.Add(comment);
         lines.Add("exec dkay-combat.cfg");
         lines.Add("exec dkay-live.cfg");
+        lines.Add("exec dkay-basic.cfg");
         await WriteAllLinesAtomicallyAsync(path, lines, cancellationToken);
     }
 

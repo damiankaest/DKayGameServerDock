@@ -1,0 +1,242 @@
+<div class="page basic-page">
+  <header class="page-header basic-header">
+    <div>
+      <p class="eyebrow">BASIC SERVER CONTROL</p>
+      <h1>Server starten und direkt steuern</h1>
+      <p class="muted">
+        Ein kleiner, nachvollziehbarer Ablauf ohne Presets, Workshop oder versteckte Automatik.
+      </p>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="error-banner">{{ error() }}</p>
+  }
+
+  <section class="basic-select panel">
+    <label for="basic-server">Vorhandenen Server auswählen</label>
+    <select
+      id="basic-server"
+      [value]="selectedServerId()"
+      [disabled]="loading() || servers().length === 0"
+      (change)="selectServer($event)"
+    >
+      @for (server of servers(); track server.id) {
+        <option [value]="server.id">
+          {{ server.name }} · {{ server.templateName }} · Port {{ server.port }}
+        </option>
+      }
+    </select>
+    @if (loading()) {
+      <small>Lade Server…</small>
+    } @else if (servers().length === 0) {
+      <small>Es ist noch kein Server im Dock registriert.</small>
+    } @else {
+      <small
+        >Die Auswahl enthält bereits im Dock registrierte Server. Es wird nichts neu
+        installiert.</small
+      >
+    }
+  </section>
+
+  @if (selectedServer(); as server) {
+    <section class="basic-server panel">
+      <div class="basic-server-main">
+        <span class="game-icon xlarge">{{ server.templateIcon }}</span>
+        <div>
+          <p class="eyebrow">AUSGEWÄHLTER SERVER</p>
+          <h2>{{ server.name }}</h2>
+          <p>
+            {{ server.templateName }} · Port {{ server.port }} · PID
+            {{ server.process.processId ?? '—' }}
+          </p>
+        </div>
+      </div>
+      <div class="basic-server-state">
+        <span class="status large" [attr.data-status]="server.status">{{ server.status }}</span>
+        <small>{{ server.process.isRunning ? 'Prozess läuft' : 'Kein laufender Prozess' }}</small>
+      </div>
+      <div class="basic-actions">
+        <button
+          class="primary-button"
+          type="button"
+          [disabled]="actioning() !== '' || server.process.isRunning"
+          (click)="action('start')"
+        >
+          {{ actioning() === 'start' ? 'Starte…' : '▶ Starten' }}
+        </button>
+        <button
+          class="danger-button"
+          type="button"
+          [disabled]="actioning() !== '' || !server.process.isRunning"
+          (click)="action('stop')"
+        >
+          {{ actioning() === 'stop' ? 'Stoppe…' : '■ Stoppen' }}
+        </button>
+        <button
+          class="secondary-button"
+          type="button"
+          [disabled]="actioning() !== '' || !server.process.isRunning"
+          (click)="action('restart')"
+        >
+          {{ actioning() === 'restart' ? 'Starte neu…' : '↻ Neustarten' }}
+        </button>
+      </div>
+    </section>
+
+    @if (server.templateId === 'counter-strike-2' && basicConfiguration(); as configuration) {
+      <section class="basic-config panel">
+        <header>
+          <div>
+            <p class="eyebrow">PERSISTENTE BASIC-CFG</p>
+            <h2>Drei kontrollierte Einstellungen</h2>
+            <p>
+              Wird in <code>dkay-basic.cfg</code> gespeichert und bei jedem Serverstart zuletzt
+              geladen.
+            </p>
+          </div>
+          <code>game/csgo/cfg/dkay-basic.cfg</code>
+        </header>
+        <div class="basic-config-fields">
+          <label class="basic-toggle">
+            <span
+              ><strong>Auto-Bhop</strong
+              ><small>Automatisches Springen und Speed-Cap-Freigabe.</small></span
+            >
+            <input
+              type="checkbox"
+              [checked]="configuration.autoBhop"
+              (change)="updateAutoBhop($event)"
+            />
+          </label>
+          <label>
+            <span><strong>Gravity</strong><small>100 bis 2000, normal ist 800.</small></span>
+            <input
+              type="number"
+              min="100"
+              max="2000"
+              step="10"
+              [value]="configuration.gravity"
+              (input)="updateBasicNumber('gravity', $event)"
+            />
+          </label>
+          <label>
+            <span><strong>Bot-Anzahl</strong><small>0 bis 32 Bots.</small></span>
+            <input
+              type="number"
+              min="0"
+              max="32"
+              step="1"
+              [value]="configuration.botQuota"
+              (input)="updateBasicNumber('botQuota', $event)"
+            />
+          </label>
+        </div>
+        <footer>
+          <span>{{ configMessage() }}</span>
+          <button
+            class="primary-button"
+            type="button"
+            [disabled]="configSaving()"
+            (click)="saveBasicConfiguration()"
+          >
+            {{
+              configSaving()
+                ? 'Speichere und prüfe…'
+                : server.process.isRunning
+                  ? 'Speichern, anwenden & prüfen'
+                  : 'Für nächsten Start speichern'
+            }}
+          </button>
+        </footer>
+      </section>
+    }
+
+    <section class="basic-console panel">
+      <header>
+        <div>
+          <p class="eyebrow">DIREKTER COMMAND</p>
+          <h2>Command über die WebUI ausführen</h2>
+          <p>
+            CS2 verwendet den lokalen RCON-Kanal. Es wird keine BAT-Datei und keine Shell geöffnet.
+          </p>
+        </div>
+        <span class="basic-transport">{{
+          server.templateId === 'counter-strike-2' ? 'RCON' : 'STDIN'
+        }}</span>
+      </header>
+
+      @if (server.templateId === 'counter-strike-2') {
+        <div class="basic-command-presets">
+          <button type="button" (click)="useCommand('status')">status</button>
+          <button type="button" (click)="useCommand('sv_autobunnyhopping')">Auto-Bhop lesen</button>
+          <button
+            type="button"
+            (click)="useCommand('sv_autobunnyhopping 1; sv_enablebunnyhopping 1')"
+          >
+            Auto-Bhop an
+          </button>
+          <button
+            type="button"
+            (click)="useCommand('sv_autobunnyhopping 0; sv_enablebunnyhopping 0')"
+          >
+            Auto-Bhop aus
+          </button>
+        </div>
+      }
+
+      <form (submit)="$event.preventDefault(); sendCommand()">
+        <span>&gt;</span>
+        <input
+          aria-label="Server command"
+          autocomplete="off"
+          maxlength="512"
+          placeholder="z. B. status oder changelevel de_mirage"
+          [value]="command()"
+          [disabled]="!server.process.isRunning || commandRunning()"
+          (input)="updateCommand($event)"
+        />
+        <button
+          type="submit"
+          [disabled]="!server.process.isRunning || commandRunning() || !command().trim()"
+        >
+          {{ commandRunning() ? 'Sende…' : 'Ausführen' }}
+        </button>
+      </form>
+      @if (!server.process.isRunning) {
+        <p class="basic-console-note">Starte den Server, bevor du einen Command sendest.</p>
+      }
+    </section>
+
+    <section class="basic-history panel">
+      <header>
+        <div>
+          <p class="eyebrow">ERGEBNISSE</p>
+          <h2>Command-Verlauf</h2>
+        </div>
+        <button
+          class="ghost-button small"
+          type="button"
+          [disabled]="commandHistory().length === 0"
+          (click)="clearHistory()"
+        >
+          Leeren
+        </button>
+      </header>
+      <div class="basic-history-list">
+        @for (entry of commandHistory(); track entry.createdAt) {
+          <article [class.failed]="entry.failed">
+            <div>
+              <time>{{ entry.createdAt.toLocaleTimeString() }}</time
+              ><code>&gt; {{ entry.command }}</code
+              ><span>{{ entry.transport }}</span>
+            </div>
+            <pre>{{ entry.output }}</pre>
+          </article>
+        } @empty {
+          <div class="basic-empty">Noch kein Command ausgeführt.</div>
+        }
+      </div>
+    </section>
+  }
+</div>

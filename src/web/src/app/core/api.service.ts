@@ -1,7 +1,30 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ApplyCs2ModePresetRequest, ConfigureCs2GsltResult, ConfigureCs2WorkshopKeyResult, ConsoleCommandResult, CreateServerRequest, Cs2LiveConfigurationApplyResult, Cs2LiveControlState, Cs2MapChangeState, Cs2ModeApplyResult, Cs2ModeCatalog, Cs2ModeState, Cs2WorkshopSearchResult, GameServer, GameTemplate, HostReadinessSnapshot, HostSnapshot, PublicServerList, ServerEvent, ServerPublication, ServerSelfTestResult } from './models';
+import {
+  ApplyCs2ModePresetRequest,
+  ConfigureCs2GsltResult,
+  ConfigureCs2WorkshopKeyResult,
+  ConsoleCommandResult,
+  CreateServerRequest,
+  Cs2BasicConfiguration,
+  Cs2BasicConfigurationState,
+  Cs2LiveConfigurationApplyResult,
+  Cs2LiveControlState,
+  Cs2MapChangeState,
+  Cs2ModeApplyResult,
+  Cs2ModeCatalog,
+  Cs2ModeState,
+  Cs2WorkshopSearchResult,
+  GameServer,
+  GameTemplate,
+  HostReadinessSnapshot,
+  HostSnapshot,
+  PublicServerList,
+  ServerEvent,
+  ServerPublication,
+  ServerSelfTestResult,
+} from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -15,7 +38,11 @@ export class ApiService {
     return this.http.get<{ userName: string }>('/api/auth/me');
   }
 
-  authenticate(setup: boolean, userName: string, password: string): Observable<{ userName: string }> {
+  authenticate(
+    setup: boolean,
+    userName: string,
+    password: string,
+  ): Observable<{ userName: string }> {
     const action = setup ? 'bootstrap' : 'login';
     return this.http.post<{ userName: string }>(`/api/auth/${action}`, { userName, password });
   }
@@ -48,7 +75,10 @@ export class ApiService {
     return this.http.post<GameServer>('/api/servers', request);
   }
 
-  serverAction(id: string, action: 'start' | 'stop' | 'restart' | 'kill' | 'update'): Observable<unknown> {
+  serverAction(
+    id: string,
+    action: 'start' | 'stop' | 'restart' | 'kill' | 'update',
+  ): Observable<unknown> {
     return this.http.post(`/api/servers/${id}/${action}`, {});
   }
 
@@ -56,8 +86,15 @@ export class ApiService {
     return this.http.delete<void>(`/api/servers/${id}`, { params: { deleteFiles } });
   }
 
-  updatePublication(id: string, published: boolean, publicPort: number): Observable<ServerPublication> {
-    return this.http.put<ServerPublication>(`/api/servers/${id}/publication`, { published, publicPort });
+  updatePublication(
+    id: string,
+    published: boolean,
+    publicPort: number,
+  ): Observable<ServerPublication> {
+    return this.http.put<ServerPublication>(`/api/servers/${id}/publication`, {
+      published,
+      publicPort,
+    });
   }
 
   publicServers(): Observable<PublicServerList> {
@@ -81,31 +118,56 @@ export class ApiService {
   }
 
   searchCs2Workshop(id: string, query: string, take = 18): Observable<Cs2WorkshopSearchResult> {
-    return this.http.get<Cs2WorkshopSearchResult>(`/api/servers/${id}/cs2-workshop/search`, { params: { query, take } });
+    return this.http.get<Cs2WorkshopSearchResult>(`/api/servers/${id}/cs2-workshop/search`, {
+      params: { query, take },
+    });
   }
 
   configureCs2WorkshopKey(id: string, key: string): Observable<ConfigureCs2WorkshopKeyResult> {
-    return this.http.put<ConfigureCs2WorkshopKeyResult>(`/api/servers/${id}/cs2-workshop/key`, { key });
+    return this.http.put<ConfigureCs2WorkshopKeyResult>(`/api/servers/${id}/cs2-workshop/key`, {
+      key,
+    });
   }
 
   cs2LiveControl(id: string): Observable<Cs2LiveControlState> {
     return this.http.get<Cs2LiveControlState>(`/api/servers/${id}/cs2-control`);
   }
 
-  applyCs2LiveControl(id: string, values: Record<string, string>, changedKeys: string[]): Observable<Cs2LiveConfigurationApplyResult> {
-    return this.http.put<Cs2LiveConfigurationApplyResult>(`/api/servers/${id}/cs2-control`, { values, changedKeys });
+  applyCs2LiveControl(
+    id: string,
+    values: Record<string, string>,
+    changedKeys: string[],
+  ): Observable<Cs2LiveConfigurationApplyResult> {
+    return this.http.put<Cs2LiveConfigurationApplyResult>(`/api/servers/${id}/cs2-control`, {
+      values,
+      changedKeys,
+    });
   }
 
-  runCs2Action(id: string, actionId: string, value: string | null = null): Observable<ConsoleCommandResult> {
-    return this.http.post<ConsoleCommandResult>(`/api/servers/${id}/cs2-control/actions`, { actionId, value });
+  runCs2Action(
+    id: string,
+    actionId: string,
+    value: string | null = null,
+  ): Observable<ConsoleCommandResult> {
+    return this.http.post<ConsoleCommandResult>(`/api/servers/${id}/cs2-control/actions`, {
+      actionId,
+      value,
+    });
   }
 
   cs2MapChange(id: string): Observable<Cs2MapChangeState> {
     return this.http.get<Cs2MapChangeState>(`/api/servers/${id}/cs2-control/map-change`);
   }
 
-  scheduleCs2MapChange(id: string, profileId: string, delaySeconds: number): Observable<Cs2MapChangeState> {
-    return this.http.post<Cs2MapChangeState>(`/api/servers/${id}/cs2-control/map-change`, { profileId, delaySeconds });
+  scheduleCs2MapChange(
+    id: string,
+    profileId: string,
+    delaySeconds: number,
+  ): Observable<Cs2MapChangeState> {
+    return this.http.post<Cs2MapChangeState>(`/api/servers/${id}/cs2-control/map-change`, {
+      profileId,
+      delaySeconds,
+    });
   }
 
   cancelCs2MapChange(id: string): Observable<Cs2MapChangeState> {
@@ -118,6 +180,20 @@ export class ApiService {
 
   sendCommand(id: string, command: string): Observable<ConsoleCommandResult> {
     return this.http.post<ConsoleCommandResult>(`/api/servers/${id}/command`, { command });
+  }
+
+  cs2BasicConfiguration(id: string): Observable<Cs2BasicConfigurationState> {
+    return this.http.get<Cs2BasicConfigurationState>(`/api/servers/${id}/basic-config`);
+  }
+
+  saveCs2BasicConfiguration(
+    id: string,
+    configuration: Cs2BasicConfiguration,
+  ): Observable<Cs2BasicConfigurationState> {
+    return this.http.put<Cs2BasicConfigurationState>(
+      `/api/servers/${id}/basic-config`,
+      configuration,
+    );
   }
 
   selfTest(id: string): Observable<ServerSelfTestResult> {

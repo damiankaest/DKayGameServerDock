@@ -6,33 +6,67 @@
     </a>
 
     <nav class="nav-list">
-      <a routerLink="/" [routerLinkActiveOptions]="{ exact: true }" routerLinkActive="active" (click)="menuOpen.set(false)"><span>⌂</span>Übersicht</a>
-      <a routerLink="/servers" routerLinkActive="active" (click)="menuOpen.set(false)"><span>▤</span>Server</a>
-      <a routerLink="/library" routerLinkActive="active" (click)="menuOpen.set(false)"><span>◇</span>Spielbibliothek</a>
-      <a routerLink="/activity" routerLinkActive="active" (click)="menuOpen.set(false)"><span>↗</span>Aktivität</a>
-      <a routerLink="/backups" routerLinkActive="active" (click)="menuOpen.set(false)"><span>◫</span>Backups</a>
+      <a
+        routerLink="/"
+        [routerLinkActiveOptions]="{ exact: true }"
+        routerLinkActive="active"
+        (click)="menuOpen.set(false)"
+        ><span>▶</span>Basic Control</a
+      >
+      <a routerLink="/dashboard" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>⌂</span>Übersicht</a
+      >
+      <a routerLink="/servers" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>▤</span>Server</a
+      >
+      <a routerLink="/library" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>◇</span>Spielbibliothek</a
+      >
+      <a routerLink="/activity" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>↗</span>Aktivität</a
+      >
+      <a routerLink="/backups" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>◫</span>Backups</a
+      >
       <div class="nav-separator"></div>
-      <a routerLink="/host" routerLinkActive="active" (click)="menuOpen.set(false)"><span>▰</span>Host</a>
-      <a routerLink="/settings" routerLinkActive="active" (click)="menuOpen.set(false)"><span>⚙</span>Einstellungen</a>
+      <a routerLink="/host" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>▰</span>Host</a
+      >
+      <a routerLink="/settings" routerLinkActive="active" (click)="menuOpen.set(false)"
+        ><span>⚙</span>Einstellungen</a
+      >
     </nav>
 
     <div class="sidebar-footer">
-      <div class="host-online"><i></i><span>Dock online<small>Lokales Netzwerk</small></span></div>
+      <div class="host-online">
+        <i></i><span>Dock online<small>Lokales Netzwerk</small></span>
+      </div>
       <button class="ghost-button" type="button" (click)="logout()">Abmelden</button>
     </div>
   </aside>
 
   @if (menuOpen()) {
-    <button class="menu-backdrop" type="button" aria-label="Close navigation" (click)="menuOpen.set(false)"></button>
+    <button
+      class="menu-backdrop"
+      type="button"
+      aria-label="Close navigation"
+      (click)="menuOpen.set(false)"
+    ></button>
   }
 
   <main class="main-area">
     <header class="mobile-header">
-      <button class="icon-button" type="button" aria-label="Open navigation" (click)="menuOpen.set(true)">☰</button>
+      <button
+        class="icon-button"
+        type="button"
+        aria-label="Open navigation"
+        (click)="menuOpen.set(true)"
+      >
+        ☰
+      </button>
       <span>DKay Game Server Dock</span>
       <i class="online-dot"></i>
     </header>
     <router-outlet />
   </main>
 </div>
-

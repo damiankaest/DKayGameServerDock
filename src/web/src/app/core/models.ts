@@ -193,6 +193,21 @@ export interface ConsoleCommandResult {
   output: string | null;
 }
 
+export interface Cs2BasicConfiguration {
+  autoBhop: boolean;
+  gravity: number;
+  botQuota: number;
+}
+
+export interface Cs2BasicConfigurationState {
+  configuration: Cs2BasicConfiguration;
+  running: boolean;
+  appliedLive: boolean;
+  message: string;
+  observedValues: Record<string, string>;
+  output: string | null;
+}
+
 export interface ServerSelfTestResult {
   passed: boolean;
   transport: string;

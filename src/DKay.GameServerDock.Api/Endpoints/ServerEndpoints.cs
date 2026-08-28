@@ -96,6 +96,17 @@ public static class ServerEndpoints
                 Cs2LiveControlService controls,
                 CancellationToken token) =>
             Results.Ok(await controls.ConfigureGsltAsync(id, request, token)));
+        group.MapGet("/{id:guid}/basic-config", async (
+                Guid id,
+                Cs2BasicControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.GetAsync(id, token)));
+        group.MapPut("/{id:guid}/basic-config", async (
+                Guid id,
+                SaveCs2BasicConfigurationRequest request,
+                Cs2BasicControlService controls,
+                CancellationToken token) =>
+            Results.Ok(await controls.SaveAsync(id, request, token)));
         group.MapPost("/{id:guid}/command", SendCommandAsync);
         group.MapPost("/{id:guid}/self-test", async (Guid id, ServerOrchestrator orchestrator, CancellationToken token) =>
             Results.Ok(await orchestrator.TestCommandChannelAsync(id, token)));
